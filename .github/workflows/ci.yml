@@ -1,0 +1,31 @@
+name: checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      # Cheapest first, and in dependency order: a stale vendored contract
+      # would make everything after it audit against the wrong thing.
+      - name: meta.ts is generated, not hand-edited
+        run: node scripts/generate.mjs --check
+
+      - name: vendored contracts are current
+        run: node scripts/freshness.mjs
+        env:
+          # Instrument's upstream is public. Set a token with access to
+          # standards-packs to check the other five as well.
+          GITHUB_TOKEN: ${{ secrets.PACKS_READ_TOKEN }}
+
+      - run: npm install --no-audit --no-fund
+      - run: npm run build
+      - run: npm run audit

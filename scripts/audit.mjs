@@ -10,8 +10,28 @@ const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 // Each package vendors its own archetypes.json and tokens.json, so the audit
 // is self-contained and never reaches outside this repository.
 const contractFor = (pack) => join(root, "packages", pack);
-const JOBS = ["E", "S", "N", "C", "T", "W"];
 const fails = [], warns = [];
+
+// The job taxonomy is read from the contract, never hardcoded here. An auditor
+// that hardcodes the thing it audits cannot detect a change to it - it would
+// keep passing against a spine that had moved underneath it.
+function jobsFrom(arch) {
+  const jobs = Object.keys(arch.jobs ?? {});
+  if (!jobs.length) throw new Error("archetypes.json declares no jobs");
+  return jobs;
+}
+
+// @standards/core restates the taxonomy as a TypeScript const. It is small
+// enough that generating it would cost more than it saves, so it is checked
+// instead: it must agree with the contract the packs are audited against.
+function coreJobs() {
+  const src = readFileSync(join(root, "packages/core/src/index.ts"), "utf8");
+  const block = src.match(/export const JOBS = \{([\s\S]*?)\}/);
+  if (!block) return null;
+  const out = {};
+  for (const m of block[1].matchAll(/(\w+)\s*:\s*"([^"]+)"/g)) out[m[1]] = m[2];
+  return out;
+}
 
 const packs = readdirSync(join(root, "packages")).filter(
   (p) => p !== "core" && existsSync(join(root, "packages", p, "dist/index.js"))
@@ -39,9 +59,25 @@ for (const pack of packs) {
   for (const name of exported.keys()) {
     if (!arch.moves.some((m) => m.move === name)) fails.push(`${pack}: exports undeclared move "${name}"`);
   }
-  // 1c. the six-job spine is covered
+  // 1c. the job spine, as the contract declares it, is covered
+  const jobs = jobsFrom(arch);
   const covered = new Set([...exported.values()].map((m) => m.job));
-  for (const j of JOBS) if (!covered.has(j)) warns.push(`${pack}: no move answers job ${j}`);
+  for (const j of jobs) if (!covered.has(j)) warns.push(`${pack}: no move answers job ${j}`);
+
+  // 1d. core's taxonomy agrees with the contract
+  const core = coreJobs();
+  if (!core) {
+    fails.push("core: could not read JOBS from packages/core/src/index.ts");
+  } else {
+    for (const j of jobs) {
+      const declared = String(arch.jobs[j]).split(/[\u2014-]/)[0].trim();
+      if (!core[j]) fails.push(`core: JOBS is missing job ${j}, which ${pack} declares`);
+      else if (core[j] !== declared)
+        fails.push(`core: JOBS[${j}] is "${core[j]}", contract says "${declared}"`);
+    }
+    for (const j of Object.keys(core))
+      if (!jobs.includes(j)) fails.push(`core: JOBS declares job ${j}, which no contract does`);
+  }
 
   // 2. materials, checked against the pack's own tokens.json
   const tokens = JSON.parse(readFileSync(join(contractFor(pack), "tokens.json"), "utf8"));
@@ -88,6 +124,6 @@ for (const pack of packs) {
 
 console.log();
 if (fails.length) { console.log(`FAIL (${fails.length}):`); fails.forEach((f) => console.log("  " + f)); }
-else console.log("FAIL (0): every pack conforms to its own contract");
+else console.log("PASS: every pack conforms to its own contract");
 if (warns.length) { console.log(`\nREVIEW (${warns.length}):`); warns.forEach((w) => console.log("  " + w)); }
 process.exit(fails.length ? 1 : 0);

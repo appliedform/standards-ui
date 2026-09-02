@@ -1,6 +1,6 @@
 import type { MoveMeta } from "@standards/core";
 
-/** Generated from packs/instrument/archetypes.json. Do not edit by hand. */
+/** Generated from instrument/archetypes.json by scripts/generate.mjs. Do not edit by hand. */
 export const META: Record<string, MoveMeta> = {
   "Datum": {
     "job": "E",

@@ -6,8 +6,12 @@
     "packages/*"
   ],
   "scripts": {
+    "generate": "node scripts/generate.mjs",
+    "generate:check": "node scripts/generate.mjs --check",
+    "freshness": "node scripts/freshness.mjs",
     "build": "node scripts/build.mjs",
-    "audit": "node scripts/audit.mjs"
+    "audit": "node scripts/audit.mjs",
+    "check": "npm run generate:check && npm run freshness && npm run build && npm run audit"
   },
   "devDependencies": {
     "@types/react": "^19.2.18",
