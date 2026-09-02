@@ -1,0 +1,26 @@
+/* Instrument — design tokens. A Standards pack, from Applied Form.
+   Technical modernism. Paste into any project.
+   Open-licence type only: Public Sans + DM Mono, both Google Fonts.
+   https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;600;800&family=DM+Mono:wght@400;500&display=swap */
+:root{
+  /* palette — five colours, no sixth */
+  --ground:#FFFFFF;
+  --ink:#111111;
+  --rule:#D8D8D8;
+  --muted:#6B6B6B;
+  --signal:#C8102E;   /* identification, one emphasis, or interaction — never a data series */
+
+  /* type */
+  --font-text:"Public Sans", system-ui, sans-serif;   /* everything textual */
+  --font-data:"DM Mono", ui-monospace, monospace;     /* every numeral, unit, ID, label */
+
+  /* system */
+  --unit:8px; --gutter:24px; --cols:12; --measure:66ch;
+  --band:32px;        /* 4 base units; 24px on 1:1 formats */
+  --radius:0;         /* never rounded */
+  --focus:#C8102E;
+
+  /* scale — nothing off it */
+  --s1:8px; --s2:16px; --s3:24px; --s4:32px; --s5:48px; --s6:64px; --s7:96px;
+}
+/* series order for charts: ink, muted, signal */

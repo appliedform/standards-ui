@@ -1,0 +1,78 @@
+{
+  "system": "Instrument",
+  "indexedBy": "rhetorical job, not visual form",
+  "jobs": {
+    "E": "Evidence \u2014 the proof is the argument",
+    "S": "Structure \u2014 the shape of the thinking is the value",
+    "N": "Narrative \u2014 words carry the weight",
+    "C": "Change \u2014 the story is a movement between states",
+    "T": "Transaction \u2014 the deal, scope or ask needs stating plainly",
+    "W": "Wayfinding \u2014 the reader needs to know where they are"
+  },
+  "selection": "One move is active per artefact. The rest are reference. This is a selection mechanism, not a list to satisfy.",
+  "moves": [
+    {
+      "job": "E",
+      "jobName": "Evidence",
+      "move": "Datum",
+      "when": "One figure reframes the section",
+      "why": "Scale in mono reads as a measurement, not a boast"
+    },
+    {
+      "job": "E",
+      "jobName": "Evidence",
+      "move": "Plate",
+      "when": "A figure needs a number and caption to be cited later",
+      "why": "Makes the evidence quotable"
+    },
+    {
+      "job": "E",
+      "jobName": "Evidence",
+      "move": "Register",
+      "when": "Three or four figures state the position together",
+      "why": "Read in one sweep on a shared baseline"
+    },
+    {
+      "job": "S",
+      "jobName": "Structure",
+      "move": "Key",
+      "when": "A legend must be understood before the data",
+      "why": "Says the data is worth decoding"
+    },
+    {
+      "job": "S",
+      "jobName": "Structure",
+      "move": "Matrix",
+      "when": "Two variables must be crossed",
+      "why": "The grid is the argument"
+    },
+    {
+      "job": "N",
+      "jobName": "Narrative",
+      "move": "Band statement",
+      "when": "A section must be declared, not introduced",
+      "why": "The invariant doing rhetorical work"
+    },
+    {
+      "job": "C",
+      "jobName": "Change",
+      "move": "Series",
+      "when": "The same measure across periods",
+      "why": "Change reads as shape before number"
+    },
+    {
+      "job": "T",
+      "jobName": "Transaction",
+      "move": "Schedule",
+      "when": "Scope, cost or duration must be stated exactly",
+      "why": "Precision is the persuasion"
+    },
+    {
+      "job": "W",
+      "jobName": "Wayfinding",
+      "move": "Running index",
+      "when": "Past page two of a long document",
+      "why": "Position is information"
+    }
+  ]
+}

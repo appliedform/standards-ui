@@ -1,0 +1,11 @@
+{
+  "name": "@standards/instrument",
+  "version": "1.0.0",
+  "description": "Instrument — technical modernism. A Standards pack, from Applied Form.",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": ["dist"],
+  "peerDependencies": { "react": ">=18" },
+  "dependencies": { "@standards/core": "0.1.0" }
+}
