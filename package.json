@@ -11,12 +11,14 @@
     "freshness": "node scripts/freshness.mjs",
     "build": "node scripts/build.mjs",
     "audit": "node scripts/audit.mjs",
-    "check": "npm run generate:check && npm run freshness && npm run build && npm run audit"
+    "check": "npm run generate:check && npm run freshness && npm run build && npm run audit && npm run test",
+    "test": "node test/render.mjs"
   },
   "devDependencies": {
     "@types/react": "^19.2.18",
     "esbuild": "^0.24.0",
     "react": "^19.2.8",
+    "react-dom": "^19.2.8",
     "typescript": "^5.6.0"
   }
 }

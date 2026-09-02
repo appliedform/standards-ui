@@ -1,4 +1,8 @@
 export { InstrumentRoot } from "./Root";
+export { Sheet, Grid, Cell, Stack, Row, Field } from "./layout";
+export { UNIT, SPACE, leading, tracking, type, smallCaps, data, fig, range, delta } from "./craft";
+export { TOKENS, VALUES } from "./tokens.generated";
+export type { Space } from "./craft";
 export { Band } from "./Band";
 export { Label, Note, Figure } from "./primitives";
 
