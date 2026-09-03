@@ -26,6 +26,12 @@ jobs:
           # standards-packs to check the other five as well.
           GITHUB_TOKEN: ${{ secrets.PACKS_READ_TOKEN }}
 
-      - run: npm install --no-audit --no-fund
+      # ci, not install: the lockfile is committed, so the install should be
+      # exactly reproducible rather than merely satisfiable.
+      - run: npm ci --no-audit --no-fund
       - run: npm run build
       - run: npm run audit
+
+      # Renders the package with no CSS import at all. This is the check that
+      # would have caught tokens.css being unreachable from the JS entry.
+      - run: npm run test
