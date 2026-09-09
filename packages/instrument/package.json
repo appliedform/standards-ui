@@ -2,10 +2,29 @@
   "name": "@standards/instrument",
   "version": "1.0.0",
   "description": "Instrument — technical modernism. A Standards pack, from Applied Form.",
+  "license": "MIT AND CC-BY-4.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/appliedform/standards-ui.git",
+    "directory": "packages/instrument"
+  },
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-  "files": ["dist"],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./styles/tokens.css": "./dist/styles/tokens.css",
+    "./dist/styles/tokens.css": "./dist/styles/tokens.css",
+    "./tokens.json": "./tokens.json",
+    "./archetypes.json": "./archetypes.json",
+    "./package.json": "./package.json"
+  },
+  "files": ["dist", "tokens.json", "archetypes.json", "README.md", "LICENSE", "LICENSE-INSTRUMENT", "NOTICE"],
+  "sideEffects": ["**/*.css"],
   "peerDependencies": { "react": ">=18" },
   "dependencies": { "@standards/core": "0.1.0" }
 }

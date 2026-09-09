@@ -1,0 +1,21 @@
+Standards by Applied Form — Instrument
+
+This package combines MIT-licensed implementation code with CC BY 4.0
+Instrument design-system material. The package licence expression
+"MIT AND CC-BY-4.0" describes these respective parts; it is not a choice
+to relicense the design system as MIT.
+
+Implementation code and TypeScript declarations: LICENSE (MIT).
+Instrument's authored rules, token definitions, CSS design values and archetype
+descriptions: LICENSE-INSTRUMENT (CC BY 4.0). This includes tokens.json,
+archetypes.json and the Instrument design material represented in the build.
+
+Attribution: Instrument, a Standards pack, from Applied Form.
+Design-system source:
+https://github.com/appliedform/standards/tree/main/packs/instrument
+React implementation source:
+https://github.com/appliedform/standards-ui/tree/main/packages/instrument
+
+Font files are not distributed in this package. InstrumentRoot can request
+Public Sans and DM Mono from Google Fonts; set loadFonts={false} to manage fonts
+in the host application. Font licensing is separate from these package licences.

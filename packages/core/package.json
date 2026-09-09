@@ -1,7 +1,25 @@
 {
   "name": "@standards/core",
   "version": "0.1.0",
+  "description": "Shared job taxonomy, move metadata and token types for Standards React packs.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/appliedform/standards-ui.git",
+    "directory": "packages/core"
+  },
   "type": "module",
   "main": "dist/index.js",
-  "types": "dist/index.d.ts"
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": ["dist", "README.md", "LICENSE"],
+  "sideEffects": false,
+  "peerDependencies": { "react": ">=18" }
 }

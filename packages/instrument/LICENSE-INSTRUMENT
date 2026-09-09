@@ -1,0 +1,20 @@
+# Instrument design-system licence
+
+Instrument, a Standards pack, from Applied Form.
+Copyright (c) 2026 Applied Form.
+
+The Instrument design system, including its authored rules, token definitions and
+archetype descriptions, is licensed under the Creative Commons Attribution 4.0
+International Licence (CC BY 4.0).
+
+Licence and full legal text:
+https://creativecommons.org/licenses/by/4.0/
+https://creativecommons.org/licenses/by/4.0/legalcode
+
+Source: https://github.com/appliedform/standards/tree/main/packs/instrument
+
+When sharing or adapting this material, retain appropriate attribution, link to
+the licence and indicate changes as the licence requires. Suggested attribution:
+“Instrument, a Standards pack, from Applied Form. CC BY 4.0.”
+
+The React implementation code is separately MIT licensed; see LICENSE and NOTICE.

@@ -70,12 +70,25 @@ Datum.meta
 That metadata is **generated** from the pack's `archetypes.json` — never typed by
 hand, so it cannot drift from the contract.
 
+`Series` plots signed values against a visible zero baseline. Bars use ink;
+`emphasiseLast` adds neutral **Current** text and one red rule, so emphasis remains explicit without
+colour. Non-finite values are shown as **Unavailable** and do not affect the scale.
+An empty series shows **No data available**; zero values retain their labels without
+inventing bar height. The optional `height` budget defaults to 200px, accepts finite
+positive numbers clamped to 96–4096px, and reserves 48px for labels (which may wrap).
+
+`Plate` also keeps every bar in ink. The first row requesting `emphasis` receives
+neutral **Selected** text, weight and one red rule; later requests do not add accents.
+The plate identifier stays ink, so this cue is the plate's only use of signal red.
+
 ## Build and audit
 
 ```bash
 npm install
 npm run build     # declarations with tsc, ESM bundles with esbuild
 npm run audit     # conformance
+npm test          # built-component regression checks (run build first)
+npm run check     # generation, freshness, build, audit and regression checks
 ```
 
 The audit is the interesting part. For each pack it checks that every declared
@@ -86,6 +99,9 @@ that no spacing falls off its scale, and that forbidden ornament is absent.
 It earns its keep. On the first pass through Instrument it found 165 spacing
 values written by habit rather than by the scale — none of them visible by eye.
 That is the argument for writing a design system as rules a machine can check.
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for component fixes, designer failure reports
+and the contract workflow. Report vulnerabilities through [SECURITY.md](SECURITY.md).
 
 ---
 
