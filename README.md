@@ -18,8 +18,8 @@ repository is MIT. The other systems in the catalogue are proprietary and are no
 part of this repository.
 
 The [agent workflow renderer](examples/agent-workflow/README.md) turns the public
-foundation's first Instrument Schedule plan into static React HTML, captures desktop and
-mobile browser evidence, and leaves design judgement explicitly outside its mechanical pass.
+foundation's six allowlisted Instrument plans into static React HTML, captures browser
+evidence, and leaves design judgement explicitly outside its mechanical pass.
 
 ## The idea
 
@@ -44,7 +44,8 @@ house styles, not one system with themes. Consistency is enforced at the
 
 ```tsx
 import { InstrumentRoot, Datum, Band } from "@standards/instrument";
-import "@standards/instrument/dist/styles/tokens.css";
+import "@standards/instrument/styles/tokens.css";
+import "@standards/instrument/styles/fonts.css"; // optional bundled local faces
 
 <InstrumentRoot>
   <Band title="Qualification report" meta="R-118" />
@@ -57,9 +58,11 @@ import "@standards/instrument/dist/styles/tokens.css";
 </InstrumentRoot>
 ```
 
-`InstrumentRoot` puts the five colours and both faces in scope as custom
-properties. Components read them through `var()`, so nothing hard-codes a value
-the system could later change — outside the root, the tokens are not in scope.
+`InstrumentRoot` marks the package boundary. The token stylesheet puts the five
+colours and font-family names on that boundary alone, so host roots and sibling
+applications keep their own values. Import `fonts.css` when the host does not
+already supply Public Sans and DM Mono; it references only the WOFF2 files bundled
+in the package and never requests a network stylesheet.
 
 Every move carries its metadata, so a component can be traced back to the rule
 that justifies it:
@@ -96,6 +99,10 @@ npm run workflow:render -- --plan PLAN.json --out DIRECTORY
 npm test          # built-component regression checks (run build first)
 npm run check     # generation, freshness, build, audit and regression checks
 ```
+
+Use Node 22 or 24 LTS for the agent workflow renderer. Its identity includes the
+exact support-manifest, package, font, runtime, Node executable and installed
+Chromium payload hashes. Plans outside the six declared job/move pairs fail closed.
 
 The audit is the interesting part. For each pack it checks that every declared
 move is exported with metadata matching `archetypes.json` exactly, that nothing

@@ -5,8 +5,10 @@
 import { readdirSync, existsSync, readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { assertPackageAlignment, supportManifestSha256 } from "./support-manifest.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
+const supportManifest = assertPackageAlignment();
 // Each package vendors its own archetypes.json and tokens.json, so the audit
 // is self-contained and never reaches outside this repository.
 const contractFor = (pack) => join(root, "packages", pack);
@@ -64,6 +66,20 @@ for (const pack of packs) {
   const covered = new Set([...exported.values()].map((m) => m.job));
   for (const j of jobs) if (!covered.has(j)) warns.push(`${pack}: no move answers job ${j}`);
 
+  if (pack === "instrument") {
+    for (const support of supportManifest.supported) {
+      const declared = arch.moves.find((move) => move.move === support.move);
+      if (!declared || declared.job !== support.job || declared.jobName !== support.jobName) {
+        fails.push(`support manifest ${support.job}/${support.move} differs from archetypes.json`);
+      }
+      const component = mod[support.binding.component];
+      if (typeof component !== "function" || component.meta?.move !== support.move
+          || component.meta?.job !== support.job) {
+        fails.push(`support manifest binding ${support.binding.component} is not the declared ${support.job}/${support.move} component`);
+      }
+    }
+  }
+
   // 1d. core's taxonomy agrees with the contract
   const core = coreJobs();
   if (!core) {
@@ -119,10 +135,24 @@ for (const pack of packs) {
       }
     }
   }
+  if (pack === "instrument") {
+    const tokenCss = readFileSync(join(dir, "dist/styles/tokens.css"), "utf8");
+    if (/(^|[},\s]):root\b/m.test(tokenCss)) fails.push("instrument: tokens.css declares host-global :root values");
+    if (/^\s*\.instrument[-\w]*/m.test(tokenCss)) {
+      fails.push("instrument: tokens.css contains a component selector outside the pack root");
+    }
+    const fontCss = readFileSync(join(dir, "dist/styles/fonts.css"), "utf8");
+    if (/https?:|\/\//i.test(fontCss)) fails.push("instrument: fonts.css contains a network URL");
+    for (const file of ["PublicSans-400.woff2", "PublicSans-600.woff2", "PublicSans-800.woff2",
+      "DMMono-400.woff2", "DMMono-500.woff2", "OFL-Public-Sans.txt", "OFL-DM-Mono.txt"]) {
+      if (!existsSync(join(dir, "dist/fonts", file))) fails.push(`instrument: missing local font asset ${file}`);
+    }
+  }
   console.log(`  ${pack.padEnd(12)} ${exported.size}/${arch.moves.length} moves, ${srcFiles.length} source files`);
 }
 
 console.log();
+console.log(`Support manifest: ${supportManifest.schemaVersion} ${supportManifestSha256()}`);
 if (fails.length) { console.log(`FAIL (${fails.length}):`); fails.forEach((f) => console.log("  " + f)); }
 else console.log("PASS: every pack conforms to its own contract");
 if (warns.length) { console.log(`\nREVIEW (${warns.length}):`); warns.forEach((w) => console.log("  " + w)); }

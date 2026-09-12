@@ -32,8 +32,10 @@ test("public tarballs contain documentation, licences and contracts, and work in
   try {
     const archives = join(temporary, "archives");
     const consumer = join(temporary, "consumer");
+    const consumer18 = join(temporary, "consumer-react-18");
     mkdirSync(archives);
     mkdirSync(consumer);
+    mkdirSync(consumer18);
     const core = pack(join(root, "packages/core"), archives, temporary);
     const instrument = pack(join(root, "packages/instrument"), archives, temporary);
     const coreFiles = core.files.map((file) => file.path).sort();
@@ -41,11 +43,15 @@ test("public tarballs contain documentation, licences and contracts, and work in
 
     const required = ["LICENSE", "LICENSE-INSTRUMENT", "NOTICE", "README.md", "tokens.json", "archetypes.json", "package.json"];
     const instrumentFiles = instrument.files.map((file) => file.path);
-    for (const file of [...required, "dist/index.js", "dist/index.d.ts", "dist/styles/tokens.css"]) {
+    const fontFiles = ["PublicSans-400.woff2", "PublicSans-600.woff2", "PublicSans-800.woff2",
+      "DMMono-400.woff2", "DMMono-500.woff2", "OFL-Public-Sans.txt", "OFL-DM-Mono.txt"]
+      .map((file) => `dist/fonts/${file}`);
+    for (const file of [...required, "dist/index.js", "dist/index.d.ts", "dist/styles/tokens.css",
+      "dist/styles/fonts.css", ...fontFiles]) {
       assert.ok(instrumentFiles.includes(file), `Instrument is missing ${file}`);
     }
     for (const file of instrumentFiles) {
-      assert.ok(required.includes(file) || /^dist\/(?:[\w/-]+\.d\.ts|index\.js|styles\/tokens\.css)$/.test(file),
+      assert.ok(required.includes(file) || /^dist\/(?:[\w/-]+\.d\.ts|index\.js|styles\/(?:tokens|fonts)\.css|fonts\/[\w.-]+)$/.test(file),
         `Unexpected public package file: ${file}`);
     }
     for (const name of ["core", "instrument"]) {
@@ -59,7 +65,7 @@ test("public tarballs contain documentation, licences and contracts, and work in
       "@standards/core": `file:${core.tarball}`,
       "@standards/instrument": `file:${instrument.tarball}`,
     };
-    for (const name of ["react", "@types/react", "csstype"]) {
+    for (const name of ["react", "react-dom", "scheduler", "@types/react", "csstype"]) {
       const directory = dirname(require.resolve(`${name}/package.json`));
       const fixture = pack(directory, archives, temporary);
       dependencies[name] = `file:${fixture.tarball}`;
@@ -83,6 +89,8 @@ test("public tarballs contain documentation, licences and contracts, and work in
     assert.deepEqual(instrumentManifest.sideEffects, ["**/*.css"]);
     assert.equal(instrumentManifest.peerDependencies.react, ">=18");
     assert.equal(instrumentManifest.dependencies["@standards/core"], coreManifest.version);
+    assert.equal(coreManifest.version, "0.2.0");
+    assert.equal(instrumentManifest.version, "2.0.0");
     for (const [name, manifest] of [["core", coreManifest], ["instrument", instrumentManifest]]) {
       assert.equal(manifest.repository.directory, `packages/${name}`);
       assert.equal(manifest.repository.url, "git+https://github.com/appliedform/standards-ui.git");
@@ -98,12 +106,15 @@ test("public tarballs contain documentation, licences and contracts, and work in
       import { fileURLToPath } from 'node:url';
       import { JOBS, defineMove } from '@standards/core';
       import * as instrument from '@standards/instrument';
+      import * as React from 'react';
+      import { renderToStaticMarkup } from 'react-dom/server';
       const require = createRequire(import.meta.url);
       const here = dirname(fileURLToPath(import.meta.url));
       for (const name of ['@standards/core', '@standards/instrument', 'react']) {
         assert.ok(realpathSync(require.resolve(name)).startsWith(join(realpathSync(here), 'node_modules') + sep));
       }
       assert.equal(JOBS.C, 'Change');
+      assert.match(React.version, /^19\\./);
       assert.equal(typeof defineMove, 'function');
       const tokens = JSON.parse(readFileSync(require.resolve('@standards/instrument/tokens.json'), 'utf8'));
       const archetypes = JSON.parse(readFileSync(require.resolve('@standards/instrument/archetypes.json'), 'utf8'));
@@ -112,9 +123,22 @@ test("public tarballs contain documentation, licences and contracts, and work in
         .map((value) => [value.meta.move, value.meta]));
       for (const move of archetypes.moves) assert.equal(moves.get(move.move)?.job, move.job);
       assert.equal(typeof instrument.Series, 'function');
+      const markup = renderToStaticMarkup(React.createElement(instrument.InstrumentRoot, null,
+        React.createElement(instrument.Datum, { label: 'Evidence', value: '24' })));
+      assert.match(markup, /data-standards-pack="instrument"/);
       const css = require.resolve('@standards/instrument/styles/tokens.css');
       assert.equal(css, require.resolve('@standards/instrument/dist/styles/tokens.css'));
       assert.match(readFileSync(css, 'utf8'), /--ink/);
+      const fonts = require.resolve('@standards/instrument/styles/fonts.css');
+      assert.equal(fonts, require.resolve('@standards/instrument/dist/styles/fonts.css'));
+      assert.equal(/https?:/.test(readFileSync(fonts, 'utf8')), false);
+      for (const file of ['PublicSans-400.woff2', 'PublicSans-600.woff2', 'PublicSans-800.woff2',
+        'DMMono-400.woff2', 'DMMono-500.woff2']) {
+        assert.equal(readFileSync(require.resolve('@standards/instrument/fonts/' + file)).subarray(0, 4).toString(), 'wOF2');
+      }
+      for (const file of ['OFL-Public-Sans.txt', 'OFL-DM-Mono.txt']) {
+        assert.match(readFileSync(require.resolve('@standards/instrument/fonts/' + file), 'utf8'), /SIL OPEN FONT LICENSE Version 1\.1/);
+      }
       for (const name of ['core', 'instrument']) {
         const manifest = JSON.parse(readFileSync(require.resolve('@standards/' + name + '/package.json'), 'utf8'));
         assert.equal(manifest.name, '@standards/' + name);
@@ -125,12 +149,12 @@ test("public tarballs contain documentation, licences and contracts, and work in
     writeFileSync(join(consumer, "check.tsx"), `
       import { JOBS, defineMove, type JobKey, type TokenContract } from '@standards/core';
       import { InstrumentRoot, Series, type SeriesProps } from '@standards/instrument';
-      const periods: SeriesProps['periods'] = [{ period: 'January', value: -24 }];
+      const periods: SeriesProps['periods'] = [{ period: 'January', value: -24, display: '−24' }];
       const job: JobKey = Series.meta.job;
       const title: string = JOBS[job];
       const Custom = defineMove<{ title: string }>((props) => <div>{props.title}</div>,
         { job: 'C', move: 'Fixture', when: 'Checking types', why: 'Checks the packed declaration surface' });
-      const Example = () => <InstrumentRoot loadFonts={false}><Series label={title} periods={periods} /><Custom title={title} /></InstrumentRoot>;
+      const Example = () => <InstrumentRoot><Series label={title} periods={periods} /><Custom title={title} /></InstrumentRoot>;
       declare const tokens: TokenContract;
       const system: string = tokens.system;
       // @ts-expect-error Packed declarations must reject text as a numeric observation.
@@ -145,6 +169,34 @@ test("public tarballs contain documentation, licences and contracts, and work in
     }, null, 2));
     const tsc = join(dirname(require.resolve("typescript/package.json")), "bin/tsc");
     command(process.execPath, [tsc, "--project", "tsconfig.json"], consumer);
+
+    const react18Dependencies = {
+      "@standards/core": `file:${core.tarball}`,
+      "@standards/instrument": `file:${instrument.tarball}`,
+    };
+    for (const [name, fixtureName] of [["react", "react18"],
+      ["loose-envify", "loose-envify"], ["js-tokens", "js-tokens"]]) {
+      const directory = dirname(require.resolve(`${fixtureName}/package.json`));
+      const fixture = pack(directory, archives, temporary);
+      react18Dependencies[name] = `file:${fixture.tarball}`;
+    }
+    writeFileSync(join(consumer18, "package.json"), JSON.stringify({
+      name: "standards-react-18-consumer", private: true, type: "module",
+      dependencies: react18Dependencies,
+    }, null, 2));
+    command(npm, ["install", "--offline", "--ignore-scripts", "--no-audit", "--no-fund"], consumer18);
+    writeFileSync(join(consumer18, "check.mjs"), `
+      import assert from 'node:assert/strict';
+      import * as React from 'react';
+      import { Datum, InstrumentRoot } from '@standards/instrument';
+      assert.match(React.version, /^18\\./);
+      const datum = Datum({ label: 'React major', value: React.version });
+      const root = InstrumentRoot({ children: datum });
+      assert.equal(React.isValidElement(datum), true);
+      assert.equal(React.isValidElement(root), true);
+      assert.equal(root.props['data-standards-pack'], 'instrument');
+    `);
+    command(process.execPath, ["check.mjs"], consumer18);
   } finally {
     rmSync(temporary, { recursive: true, force: true });
   }

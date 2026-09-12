@@ -1,0 +1,38 @@
+/* Optional locally bundled Instrument faces. Import this stylesheet explicitly
+   when the host does not already supply Public Sans and DM Mono. No network
+   request or global token declaration is introduced by this file. */
+@font-face{
+  font-family:"Public Sans";
+  font-style:normal;
+  font-weight:400;
+  font-display:swap;
+  src:url("../fonts/PublicSans-400.woff2") format("woff2");
+}
+@font-face{
+  font-family:"Public Sans";
+  font-style:normal;
+  font-weight:600;
+  font-display:swap;
+  src:url("../fonts/PublicSans-600.woff2") format("woff2");
+}
+@font-face{
+  font-family:"Public Sans";
+  font-style:normal;
+  font-weight:800;
+  font-display:swap;
+  src:url("../fonts/PublicSans-800.woff2") format("woff2");
+}
+@font-face{
+  font-family:"DM Mono";
+  font-style:normal;
+  font-weight:400;
+  font-display:swap;
+  src:url("../fonts/DMMono-400.woff2") format("woff2");
+}
+@font-face{
+  font-family:"DM Mono";
+  font-style:normal;
+  font-weight:500;
+  font-display:swap;
+  src:url("../fonts/DMMono-500.woff2") format("woff2");
+}

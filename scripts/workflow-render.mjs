@@ -8,22 +8,39 @@ import { fileURLToPath } from "node:url";
 import * as React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { chromium } from "playwright";
-import { InstrumentRoot, Schedule } from "../packages/instrument/dist/index.js";
+import {
+  BandStatement,
+  Datum,
+  InstrumentRoot,
+  Matrix,
+  RunningIndex,
+  Schedule,
+  Series,
+} from "../packages/instrument/dist/index.js";
+import {
+  assertPackageAlignment,
+  loadSupportManifest,
+  supportForPlan,
+  supportManifestSha256,
+} from "./support-manifest.mjs";
 
-const VERSION = "0.1.0";
+const SUPPORT_MANIFEST = assertPackageAlignment(loadSupportManifest());
+const SUPPORT_MANIFEST_SHA256 = supportManifestSha256();
+const VERSION = SUPPORT_MANIFEST.renderer.version;
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const scriptPath = fileURLToPath(import.meta.url);
 const FONT_ASSET_PATHS = [
-  "node_modules/@fontsource/public-sans/files/public-sans-latin-400-normal.woff2",
-  "node_modules/@fontsource/public-sans/files/public-sans-latin-600-normal.woff2",
-  "node_modules/@fontsource/public-sans/files/public-sans-latin-800-normal.woff2",
-  "node_modules/@fontsource/dm-mono/files/dm-mono-latin-400-normal.woff2",
-  "node_modules/@fontsource/dm-mono/files/dm-mono-latin-500-normal.woff2",
-  "node_modules/@fontsource/public-sans/LICENSE",
-  "node_modules/@fontsource/dm-mono/LICENSE",
+  "packages/instrument/dist/fonts/PublicSans-400.woff2",
+  "packages/instrument/dist/fonts/PublicSans-600.woff2",
+  "packages/instrument/dist/fonts/PublicSans-800.woff2",
+  "packages/instrument/dist/fonts/DMMono-400.woff2",
+  "packages/instrument/dist/fonts/DMMono-500.woff2",
+  "packages/instrument/dist/fonts/OFL-Public-Sans.txt",
+  "packages/instrument/dist/fonts/OFL-DM-Mono.txt",
 ];
 const RUNTIME_PATHS = ["packages/core/dist", "node_modules/react", "node_modules/react-dom",
   "node_modules/scheduler", "node_modules/playwright", "node_modules/playwright-core"];
+const COMPONENTS = { BandStatement, Datum, Matrix, RunningIndex, Schedule, Series };
 
 function sha256(value) {
   return createHash("sha256").update(value).digest("hex");
@@ -76,20 +93,25 @@ function hashMap(value, name, minimum = 1, maximum = 32) {
 }
 
 function expectedFacts(plan) {
-  exactKeys(plan, ["schemaVersion", "system", "job", "move", "artifact", "context", "selection",
-    "binding", "renderer", "facts", "rules", "maxRepairTurns", "source", "limitations"], [], "plan");
-  if (plan?.schemaVersion !== VERSION || plan?.system !== "instrument" || plan?.job !== "T" || plan?.move !== "Schedule") {
-    throw new Error("renderer supports Instrument Transaction/Schedule plan 0.1.0 only");
+  exactKeys(plan, ["schemaVersion", "system", "job", "move", "content", "artifact", "context", "selection",
+    "binding", "renderer", "facts", "requiredRelationships", "rules", "maxRepairTurns", "source", "limitations"], [], "plan");
+  const manifest = assertPackageAlignment(SUPPORT_MANIFEST);
+  if (plan?.schemaVersion !== VERSION || plan?.system !== manifest.system.slug) {
+    throw new Error(`renderer supports ${manifest.system.slug} workflow ${VERSION} plans only`);
   }
+  const support = supportForPlan(plan, manifest);
+
+  exactKeys(plan.content, ["kind", "data"], [], "content");
   exactKeys(plan.artifact, ["format", "title", "viewports"], [], "artifact");
-  if (plan?.artifact?.format !== "html" || !Array.isArray(plan.artifact.viewports)
+  if (plan.artifact.format !== "html" || !Array.isArray(plan.artifact.viewports)
       || plan.artifact.viewports.length < 1 || plan.artifact.viewports.length > 3) {
     throw new Error("plan must declare one to three HTML viewports");
   }
+  nonblank(plan.artifact.title, "title");
   const sizes = new Set();
   for (const viewport of plan.artifact.viewports) {
     exactKeys(viewport, ["width", "height"], [], "viewport");
-    if (!Number.isInteger(viewport?.width) || !Number.isInteger(viewport?.height)
+    if (!Number.isInteger(viewport.width) || !Number.isInteger(viewport.height)
         || viewport.width < 320 || viewport.width > 1920 || viewport.height < 320 || viewport.height > 2160) {
       throw new Error("viewport is outside the supported bounds");
     }
@@ -102,85 +124,194 @@ function expectedFacts(plan) {
   nonblank(plan.context.reason, "context reason");
   exactKeys(plan.selection, ["reason", "trigger", "alternatives"], [], "selection");
   if (!Array.isArray(plan.selection.alternatives) || plan.selection.alternatives.length !== 0) {
-    throw new Error("Schedule plan must have no unresolved move alternatives");
+    throw new Error("plan must have no unresolved move alternatives");
   }
   nonblank(plan.selection.reason, "selection reason");
   nonblank(plan.selection.trigger, "selection trigger");
-  const binding = plan.binding;
-  exactKeys(binding, ["package", "packageVersion", "component", "props"], [], "binding");
-  if (binding?.package !== "@standards/instrument" || binding?.component !== "Schedule"
-      || binding?.props?.factPrefix !== "schedule") {
-    throw new Error("unsupported implementation binding");
-  }
-  nonblank(binding.packageVersion, "package version");
-  exactKeys(plan.renderer, ["name", "version", "sourceSha256", "packageVersion", "packageEntrySha256",
-    "tokensSha256", "fontAssetsSha256", "runtimeModulesSha256", "lockfileSha256",
-    "browserLauncherSha256", "browserPayloadSha256", "nodeExecutableSha256", "browserRevision",
-    "browser", "platform", "nodeVersion"], [], "renderer");
-  if (plan.renderer.name !== "standards-ui-workflow-render" || plan.renderer.version !== VERSION
-      || plan.renderer.packageVersion !== binding.packageVersion
-      || ["sourceSha256", "packageEntrySha256", "tokensSha256", "fontAssetsSha256",
-        "runtimeModulesSha256", "lockfileSha256", "browserLauncherSha256",
-        "browserPayloadSha256", "nodeExecutableSha256"]
-        .some((key) => !/^[0-9a-f]{64}$/.test(plan.renderer[key]))) {
-    throw new Error("renderer identity is invalid or incompatible with this host");
-  }
-  for (const key of ["browserRevision", "browser", "platform", "nodeVersion"]) {
-    nonblank(plan.renderer[key], `renderer ${key}`);
-  }
-  const props = binding.props;
-  exactKeys(props, ["label", "columns", "lines", "factPrefix"], ["total", "note"], "Schedule props");
-  if (!Array.isArray(props.lines) || props.lines.length < 1 || props.lines.length > 24) {
-    throw new Error("Schedule needs one to 24 lines");
-  }
-  const expected = new Map([["title", nonblank(plan.artifact.title, "title")],
-    ["schedule.label", nonblank(props.label, "schedule label")]]);
-  exactKeys(props.columns, ["ref", "description", "duration", "amount"], [], "Schedule columns");
-  for (const name of ["ref", "description", "duration", "amount"]) {
-    expected.set(`schedule.columns.${name}`, nonblank(props.columns?.[name], `column ${name}`));
-  }
-  props.lines.forEach((line, index) => {
-    exactKeys(line, ["ref", "description", "duration", "amount"], ["standard"], `line ${index}`);
-    for (const name of ["ref", "description", "duration", "amount"]) {
-      expected.set(`schedule.lines.${index}.${name}`, nonblank(line?.[name], `line ${index} ${name}`));
+
+  exactKeys(plan.binding, ["package", "packageVersion", "component", "props"], [], "binding");
+  if (plan.binding.package !== support.binding.package
+      || plan.binding.packageVersion !== support.binding.packageVersion
+      || plan.binding.component !== support.binding.component) throw new Error("unsupported implementation binding");
+  const props = plan.binding.props;
+  if (!props || typeof props !== "object" || Array.isArray(props)
+      || props.factPrefix !== support.binding.factPrefix) throw new Error("binding has an invalid fact prefix");
+
+  const expected = new Map([["title", nonblank(plan.artifact.title, "title")]]);
+  const add = (id, value, name = id) => expected.set(id, nonblank(value, name));
+  const list = (value, name, minimum, maximum) => {
+    if (!Array.isArray(value) || value.length < minimum || value.length > maximum) {
+      throw new Error(`${name} must contain ${minimum} to ${maximum} items`);
     }
-    if (line.standard !== undefined) expected.set(`schedule.lines.${index}.standard`, nonblank(line.standard, "standard"));
-  });
-  if (props.total !== undefined) {
-    exactKeys(props.total, ["label", "duration", "amount"], [], "Schedule total");
-    for (const name of ["label", "duration", "amount"]) {
-      expected.set(`schedule.total.${name}`, nonblank(props.total?.[name], `total ${name}`));
+    return value;
+  };
+  const optionalList = (value, name, maximum) => value === undefined ? [] : list(value, name, 1, maximum);
+  const finite = (value, name) => {
+    if (typeof value !== "number" || !Number.isFinite(value)) throw new Error(`${name} must be a finite number`);
+    return value;
+  };
+  const uniqueText = (values, name) => {
+    const normalized = values.map((value) => nonblank(value, name).normalize("NFC").replace(/\s+/g, " "));
+    if (new Set(normalized).size !== normalized.length) throw new Error(`${name} must be unique after text normalization`);
+  };
+
+  if (support.contentKind === "datum") {
+    exactKeys(props, ["label", "value", "factPrefix"], ["unit", "supporting", "note"], "Datum props");
+    add("datum.label", props.label); add("datum.value", props.value);
+    if (props.unit !== undefined) add("datum.unit", props.unit);
+    const supporting = optionalList(props.supporting, "Datum supporting figures", 4);
+    uniqueText(supporting.map((item) => item.term), "Datum supporting terms");
+    supporting.forEach((item, index) => {
+      exactKeys(item, ["term", "value"], [], `Datum supporting ${index}`);
+      add(`datum.supporting.${index}.term`, item.term); add(`datum.supporting.${index}.value`, item.value);
+    });
+    if (props.note !== undefined) add("datum.note", props.note);
+  } else if (support.contentKind === "matrix") {
+    exactKeys(props, ["label", "columns", "rows", "factPrefix"], ["emphasis", "note"], "Matrix props");
+    add("matrix.label", props.label);
+    const columns = list(props.columns, "Matrix columns", 2, 8);
+    const rows = list(props.rows, "Matrix rows", 1, 24);
+    uniqueText(columns, "Matrix column labels");
+    columns.forEach((value, index) => add(`matrix.columns.${index}`, value));
+    rows.forEach((row, rowIndex) => {
+      exactKeys(row, ["label", "values"], [], `Matrix row ${rowIndex}`);
+      add(`matrix.rows.${rowIndex}.label`, row.label);
+      const values = list(row.values, `Matrix row ${rowIndex} values`, 2, 8);
+      if (values.length !== props.columns.length) throw new Error(`Matrix row ${rowIndex} does not match the column count`);
+      values.forEach((value, columnIndex) => add(`matrix.rows.${rowIndex}.values.${columnIndex}`, value));
+    });
+    uniqueText(rows.map((row) => row.label), "Matrix row labels");
+    if (props.emphasis !== undefined) {
+      if (!Array.isArray(props.emphasis) || props.emphasis.length !== 2
+          || !props.emphasis.every(Number.isInteger)
+          || props.emphasis[0] < 0 || props.emphasis[0] >= props.rows.length
+          || props.emphasis[1] < 0 || props.emphasis[1] >= props.columns.length) {
+        throw new Error("Matrix emphasis must identify an existing cell");
+      }
     }
+    if (props.note !== undefined) add("matrix.note", props.note);
+  } else if (support.contentKind === "bandStatement") {
+    exactKeys(props, ["statement", "factPrefix"], ["label", "figures", "note", "bleed"], "BandStatement props");
+    if (props.label !== undefined) add("bandStatement.label", props.label);
+    add("bandStatement.statement", props.statement);
+    const figures = optionalList(props.figures, "BandStatement figures", 4);
+    uniqueText(figures.map((item) => item.term), "BandStatement figure terms");
+    figures.forEach((item, index) => {
+      exactKeys(item, ["term", "value"], [], `BandStatement figure ${index}`);
+      add(`bandStatement.figures.${index}.term`, item.term); add(`bandStatement.figures.${index}.value`, item.value);
+    });
+    if (props.note !== undefined) add("bandStatement.note", props.note);
+    if (props.bleed !== undefined && (!Number.isInteger(props.bleed) || props.bleed < 0 || props.bleed > 96)) {
+      throw new Error("BandStatement bleed must be an integer from 0 to 96");
+    }
+  } else if (support.contentKind === "series") {
+    exactKeys(props, ["label", "periods", "factPrefix"], ["emphasiseLast", "summary", "height", "note"], "Series props");
+    add("series.label", props.label);
+    const periods = list(props.periods, "Series periods", 2, 24);
+    add("series.zero", "0");
+    periods.forEach((period, index) => {
+      exactKeys(period, ["period", "value", "display"], [], `Series period ${index}`);
+      add(`series.periods.${index}.period`, period.period);
+      finite(period.value, `Series period ${index} value`);
+      add(`series.periods.${index}.display`, period.display);
+    });
+    uniqueText(periods.map((period) => period.period), "Series periods");
+    if (props.emphasiseLast !== undefined && typeof props.emphasiseLast !== "boolean") throw new Error("Series emphasiseLast must be boolean");
+    const summary = optionalList(props.summary, "Series summary", 4);
+    uniqueText(summary.map((item) => item.term), "Series summary terms");
+    summary.forEach((item, index) => {
+      exactKeys(item, ["term", "value"], [], `Series summary ${index}`);
+      add(`series.summary.${index}.term`, item.term); add(`series.summary.${index}.value`, item.value);
+    });
+    if (props.height !== undefined && (!Number.isInteger(props.height) || props.height < 96 || props.height > 4096)) {
+      throw new Error("Series height must be an integer from 96 to 4096");
+    }
+    if (props.note !== undefined) add("series.note", props.note);
+    if (props.emphasiseLast !== false) add("series.current", "Current");
+  } else if (support.contentKind === "schedule") {
+    exactKeys(props, ["label", "lines", "factPrefix"], ["columns", "total", "note"], "Schedule props");
+    add("schedule.label", props.label);
+    const columns = { ref: "REF", description: "DESCRIPTION", duration: "DURATION", amount: "AMOUNT", ...(props.columns ?? {}) };
+    exactKeys(columns, ["ref", "description", "duration", "amount"], [], "Schedule columns");
+    for (const name of ["ref", "description", "duration", "amount"]) add(`schedule.columns.${name}`, columns[name]);
+    const references = new Set();
+    list(props.lines, "Schedule lines", 1, 24).forEach((line, index) => {
+      exactKeys(line, ["ref", "description", "duration", "amount"], ["standard"], `Schedule line ${index}`);
+      const ref = nonblank(line.ref, `Schedule line ${index} ref`).normalize("NFC").replace(/\s+/g, " ");
+      if (references.has(ref)) throw new Error("Schedule line references must be unique");
+      references.add(ref);
+      for (const name of ["ref", "description", "standard", "duration", "amount"]) {
+        if (line[name] !== undefined) add(`schedule.lines.${index}.${name}`, line[name]);
+      }
+    });
+    if (props.total !== undefined) {
+      exactKeys(props.total, ["label", "duration", "amount"], [], "Schedule total");
+      for (const name of ["label", "duration", "amount"]) add(`schedule.total.${name}`, props.total[name]);
+    }
+    if (props.note !== undefined) add("schedule.note", props.note);
+  } else if (support.contentKind === "runningIndex") {
+    exactKeys(props, ["document", "folio", "sections", "factPrefix"], ["current", "note"], "RunningIndex props");
+    add("runningIndex.document", props.document); add("runningIndex.folio", props.folio);
+    const sections = list(props.sections, "RunningIndex sections", 1, 24);
+    uniqueText(sections, "RunningIndex sections");
+    sections.forEach((value, index) => {
+      add(`runningIndex.numbers.${index}`, String(index + 1));
+      add(`runningIndex.sections.${index}`, value);
+    });
+    if (props.current !== undefined && (!Number.isInteger(props.current) || props.current < 1 || props.current > props.sections.length)) {
+      throw new Error("RunningIndex current must identify an existing section");
+    }
+    if (props.note !== undefined) add("runningIndex.note", props.note);
+  } else {
+    throw new Error("support manifest has no renderer validator for the content kind");
   }
-  if (props.note !== undefined) expected.set("schedule.note", nonblank(props.note, "note"));
+
   const supplied = new Map();
-  if (!Array.isArray(plan.facts) || plan.facts.length < 1 || plan.facts.length > 140) throw new Error("facts must be a bounded array");
-  for (const fact of plan.facts || []) {
+  if (!Array.isArray(plan.facts) || plan.facts.length < 1 || plan.facts.length > 300) throw new Error("facts must be a bounded array");
+  for (const fact of plan.facts) {
     exactKeys(fact, ["id", "text"], [], "fact");
-    if (supplied.has(fact?.id)) throw new Error("plan has a duplicate fact id");
-    const id = nonblank(fact?.id, "fact id");
-    if (!/^[a-zA-Z0-9.]+$/.test(id)) throw new Error("fact id has unsupported characters");
-    supplied.set(id, nonblank(fact?.text, "fact text"));
+    const id = nonblank(fact.id, "fact id");
+    if (!/^[a-zA-Z0-9.]+$/.test(id) || supplied.has(id)) throw new Error("plan has an invalid or duplicate fact id");
+    supplied.set(id, nonblank(fact.text, "fact text"));
   }
-  if (canonical(Object.fromEntries(supplied)) !== canonical(Object.fromEntries(expected))) {
-    throw new Error("plan facts differ from the bound Schedule props");
+  if (canonical(plan.facts) !== canonical([...expected].map(([id, text]) => ({ id, text })))) {
+    throw new Error(`plan facts differ from the bound ${support.binding.component} props`);
   }
-  if (plan.maxRepairTurns !== 2 || !Array.isArray(plan.rules) || plan.rules.length < 1 || plan.rules.length > 32
-      || plan.rules.some((rule) => typeof rule !== "string" || !rule.trim())
+  if (canonical(plan.content.data) !== canonical(Object.fromEntries(Object.entries(props).filter(([key]) => key !== "factPrefix")))) {
+    throw new Error("plan content differs from its bound component props");
+  }
+  if (canonical(plan.requiredRelationships) !== canonical(support.requiredRelationships)) {
+    throw new Error("plan relationship inventory differs from the support manifest");
+  }
+  if (plan.maxRepairTurns !== manifest.workflow.maxRepairTurns || !Array.isArray(plan.rules)
+      || plan.rules.length < 1 || plan.rules.length > 32 || plan.rules.some((rule) => typeof rule !== "string" || !rule.trim())
       || !Array.isArray(plan.limitations) || plan.limitations.length < 1 || plan.limitations.length > 20
       || plan.limitations.some((item) => typeof item !== "string" || !item.trim())) {
     throw new Error("plan rule, limitation or repair bounds are invalid");
   }
-  exactKeys(plan.source, ["systemVersion", "schemaVersion", "files", "implementation"], [], "source");
-  if (nonblank(plan.source.systemVersion, "system version") !== binding.packageVersion) {
-    throw new Error("package and system versions differ");
-  }
-  nonblank(plan.source.schemaVersion, "schema version");
+  exactKeys(plan.source, ["systemVersion", "schemaVersion", "supportManifestSha256", "files", "implementation"], [], "source");
+  if (plan.source.systemVersion !== manifest.system.contentVersion
+      || plan.source.schemaVersion !== manifest.system.contentSchemaVersion
+      || plan.source.supportManifestSha256 !== SUPPORT_MANIFEST_SHA256) throw new Error("plan source identity differs from support manifest");
   hashMap(plan.source.files, "source files", 1, 32);
-  hashMap(plan.source.implementation, "source implementation", 1, 32);
+  hashMap(plan.source.implementation, "source implementation", 1, 40);
+
+  exactKeys(plan.renderer, ["name", "version", "supportManifestSha256", "sourceSha256", "packageVersion",
+    "packageEntrySha256", "tokensSha256", "fontAssetsSha256", "runtimeModulesSha256", "lockfileSha256",
+    "browserLauncherSha256", "browserPayloadSha256", "nodeExecutableSha256", "browserRevision", "browser",
+    "platform", "nodeVersion"], [], "renderer");
+  if (plan.renderer.name !== manifest.renderer.name || plan.renderer.version !== manifest.renderer.version
+      || plan.renderer.supportManifestSha256 !== SUPPORT_MANIFEST_SHA256
+      || plan.renderer.packageVersion !== support.binding.packageVersion
+      || ["sourceSha256", "packageEntrySha256", "tokensSha256", "fontAssetsSha256", "runtimeModulesSha256",
+        "lockfileSha256", "browserLauncherSha256", "browserPayloadSha256", "nodeExecutableSha256"]
+        .some((key) => !/^[0-9a-f]{64}$/.test(plan.renderer[key]))) {
+    throw new Error("renderer identity is invalid or incompatible with this host");
+  }
+  for (const key of ["browserRevision", "browser", "platform", "nodeVersion"]) nonblank(plan.renderer[key], `renderer ${key}`);
+  if (!/^v(?:22|24)\.[0-9]+\.[0-9]+/.test(plan.renderer.nodeVersion)) throw new Error("renderer requires Node 22 or 24 LTS");
   return expected;
 }
-
 async function readBounded(path, maximum, name) {
   const bytes = await readFile(path);
   if (bytes.length > maximum) throw new Error(`${name} exceeds ${maximum} bytes`);
@@ -233,6 +364,9 @@ async function hashTree(directory) {
 }
 
 async function rendererIdentity(browserVersion = null) {
+  if (!/^v(?:22|24)\.[0-9]+\.[0-9]+/.test(process.version)) {
+    throw new Error(`renderer requires Node 22 or 24 LTS; received ${process.version}`);
+  }
   let launched = null;
   if (browserVersion === null) {
     launched = await chromium.launch({ headless: true, chromiumSandbox: true });
@@ -268,7 +402,8 @@ async function rendererIdentity(browserVersion = null) {
     const browserRevision = browsers.browsers?.find((item) => item.name === "chromium")?.revision;
     nonblank(browserRevision, "Playwright Chromium revision");
     const browserExecutable = chromium.executablePath();
-    return { name: "standards-ui-workflow-render", version: VERSION,
+    return { name: SUPPORT_MANIFEST.renderer.name, version: VERSION,
+      supportManifestSha256: SUPPORT_MANIFEST_SHA256,
       sourceSha256: sha256(await readFile(scriptPath)), packageVersion: packageMetadata.version,
       packageEntrySha256: sha256(await readFile(join(root, "packages/instrument/dist/index.js"))),
       tokensSha256: sha256(await readFile(join(root, "packages/instrument/dist/styles/tokens.css"))),
@@ -285,36 +420,40 @@ async function rendererIdentity(browserVersion = null) {
 
 async function embeddedFonts() {
   const fonts = [
-    ["Public Sans", 400, "node_modules/@fontsource/public-sans/files/public-sans-latin-400-normal.woff2"],
-    ["Public Sans", 600, "node_modules/@fontsource/public-sans/files/public-sans-latin-600-normal.woff2"],
-    ["Public Sans", 800, "node_modules/@fontsource/public-sans/files/public-sans-latin-800-normal.woff2"],
-    ["DM Mono", 400, "node_modules/@fontsource/dm-mono/files/dm-mono-latin-400-normal.woff2"],
-    ["DM Mono", 500, "node_modules/@fontsource/dm-mono/files/dm-mono-latin-500-normal.woff2"],
+    ["Public Sans", 400, "packages/instrument/dist/fonts/PublicSans-400.woff2"],
+    ["Public Sans", 600, "packages/instrument/dist/fonts/PublicSans-600.woff2"],
+    ["Public Sans", 800, "packages/instrument/dist/fonts/PublicSans-800.woff2"],
+    ["DM Mono", 400, "packages/instrument/dist/fonts/DMMono-400.woff2"],
+    ["DM Mono", 500, "packages/instrument/dist/fonts/DMMono-500.woff2"],
   ];
   const css = (await Promise.all(fonts.map(async ([family, weight, path]) => {
     const bytes = await readFile(join(root, path));
     if (bytes.subarray(0, 4).toString() !== "wOF2") throw new Error(`invalid bundled WOFF2 font: ${path}`);
     return `@font-face{font-family:${JSON.stringify(family)};font-style:normal;font-weight:${weight};font-display:block;src:url(data:font/woff2;base64,${bytes.toString("base64")}) format("woff2")}`;
   }))).join("\n");
-  const licenses = await Promise.all(["public-sans", "dm-mono"].map(async (family) => ({
-    family,
-    base64: (await readFile(join(root, `node_modules/@fontsource/${family}/LICENSE`))).toString("base64"),
-  })));
+  const licenses = await Promise.all([
+    ["public-sans", "packages/instrument/dist/fonts/OFL-Public-Sans.txt"],
+    ["dm-mono", "packages/instrument/dist/fonts/OFL-DM-Mono.txt"],
+  ].map(async ([family, path]) => ({ family,
+    base64: (await readFile(join(root, path))).toString("base64") })));
   return { css, licenses };
 }
 
 async function renderPlan(plan) {
   expectedFacts(plan);
+  const support = supportForPlan(plan, SUPPORT_MANIFEST);
+  const Component = COMPONENTS[support.binding.component];
+  if (!Component) throw new Error("support manifest names an unavailable renderer component");
   const tokens = await readFile(join(root, "packages/instrument/dist/styles/tokens.css"), "utf8");
   const fonts = await embeddedFonts();
   const props = plan.binding.props;
   const body = renderToStaticMarkup(
-    React.createElement(InstrumentRoot, { loadFonts: false },
+    React.createElement(InstrumentRoot, null,
       React.createElement("header", { className: "instrument-band" },
         React.createElement("h1", { className: "instrument-band-title", "data-std-fact": "title" },
           plan.artifact.title)),
       React.createElement("main", { className: "instrument-shell" },
-        React.createElement(Schedule, props))))
+        React.createElement(Component, props))))
   ;
   const licenseMetadata = fonts.licenses.map(({ family, base64 }) =>
     `<meta name="standards-font-license:${family}" data-encoding="base64" content="${base64}">`).join("\n");
@@ -322,7 +461,7 @@ async function renderPlan(plan) {
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 ${licenseMetadata}
 <title>${escapeHtml(plan.artifact.title)}</title><style>${fonts.css}\n${tokens}
-*,*::before,*::after{box-sizing:border-box}html,body{margin:0;min-width:320px;background:var(--ground)}
+*,*::before,*::after{box-sizing:border-box}html,body{margin:0;min-width:320px;background:#fff}
 body{min-height:100vh}[data-standards-pack="instrument"]{min-height:100vh}.instrument-band{display:flex;align-items:center;width:100%;height:32px;padding:0 16px;background:var(--ink)}
 .instrument-band-title{min-width:0;margin:0;color:#fff;font-size:13px;font-weight:600;line-height:1.1;overflow-wrap:normal;word-break:normal}.instrument-shell{width:100%;max-width:1120px;margin:0 auto;padding:48px 32px 64px}
 @media(max-width:639px){.instrument-shell{padding:32px 16px 48px}}
@@ -372,12 +511,13 @@ async function inspectArtifact(plan, html, outDir) {
       if (pageErrorOverflow || blockedRequestOverflow) {
         throw new Error("artifact exceeds the 100 browser-error or blocked-request inspection limit");
       }
-      const expectsFooter = plan.binding.props.total !== undefined;
-      const observed = await page.evaluate((expectsFooter) => {
+      const inspection = { move: plan.move, contentKind: plan.content.kind,
+        props: plan.binding.props, requiredRelationships: plan.requiredRelationships };
+      const observed = await page.evaluate((input) => {
         const nodeCount = document.querySelectorAll("*").length;
         const markerCount = document.querySelectorAll("[data-std-fact]").length;
         if (nodeCount > 20_000) throw new Error("artifact exceeds the 20000 element inspection limit");
-        if (markerCount > 140) throw new Error("artifact exceeds the 140 fact-marker inspection limit");
+        if (markerCount > 300) throw new Error("artifact exceeds the 300 fact-marker inspection limit");
         const bodyTextLength = [...document.body.innerText.trim()].length;
         if (bodyTextLength > 1_000_000) throw new Error("artifact exceeds the 1000000 character rendered-text limit");
         const hitTestStyle = document.createElement("style");
@@ -513,7 +653,8 @@ async function inspectArtifact(plan, html, outDir) {
           if (!shown(element)) return false;
           const rect = element.getBoundingClientRect();
           return rect.left < -1 || rect.right > document.documentElement.clientWidth + 1
-            || element.scrollWidth > element.clientWidth + 1;
+            || (document.documentElement.scrollWidth > document.documentElement.clientWidth + 1
+              && element.scrollWidth > element.clientWidth + 1);
         });
         if (overflowCandidates.length > 200) throw new Error("artifact exceeds the 200 overflowing-element inspection limit");
         const overflowingElements = overflowCandidates.map((element) => ({ tag: element.tagName.toLowerCase(),
@@ -528,31 +669,6 @@ async function inspectArtifact(plan, html, outDir) {
               && shown(parent) && !clipped(parent) && !occluded(parent)) unmarkedText.push(text);
           if (unmarkedText.length > 200) throw new Error("artifact exceeds the 200 unmarked-text inspection limit");
         }
-        const tables = [...document.querySelectorAll("table")].filter(shown);
-        const table = tables[0];
-        const caption = table?.querySelector(":scope > caption");
-        const columnHeaders = table ? [...table.querySelectorAll(":scope > thead th")]
-          .filter(shown) : [];
-        const rows = table ? [...table.querySelectorAll(":scope > tbody > tr")] : [];
-        const footers = table ? [...table.querySelectorAll(":scope > tfoot")] : [];
-        const footerRows = footers.length === 1
-          ? [...footers[0].children].filter((child) => child.tagName === "TR") : [];
-        const noSpan = (cell) => cell.colSpan === 1 && cell.rowSpan === 1;
-        const footerCells = footerRows.length === 1 ? [...footerRows[0].children] : [];
-        const durationBeforeAmount = (duration, amount) => {
-          if (!duration || !amount) return false;
-          const durationBounds = duration.getBoundingClientRect();
-          const amountBounds = amount.getBoundingClientRect();
-          const verticalOverlap = Math.min(durationBounds.bottom, amountBounds.bottom)
-            - Math.max(durationBounds.top, amountBounds.top);
-          return durationBounds.width > 0 && durationBounds.height > 0
-            && amountBounds.width > 0 && amountBounds.height > 0
-            && durationBounds.left < amountBounds.left && verticalOverlap > 0;
-        };
-        const numericColumnOrder = rows.length > 0
-          && rows.every((row) => durationBeforeAmount(row.children[2], row.children[3]))
-          && (!expectsFooter || (footerCells.length === 3
-            && durationBeforeAmount(footerCells[1], footerCells[2])));
         const titleMarkers = [...document.querySelectorAll('[data-std-fact="title"]')];
         const invariantTitle = titleMarkers.length === 1 ? titleMarkers[0] : null;
         const fullViewport = (bounds) => bounds.width > 0 && bounds.height > 0
@@ -607,38 +723,160 @@ async function inspectArtifact(plan, html, outDir) {
         };
         const visibleHeadings = [...document.querySelectorAll("h1")]
           .filter((heading) => shown(heading) && !occluded(heading));
+        const factNodes = (identifier) => [...document.querySelectorAll(`[data-std-fact="${identifier}"]`)];
+        const oneFact = (identifier) => {
+          const matches = factNodes(identifier);
+          return matches.length === 1 ? matches[0] : null;
+        };
+        const usable = (element) => Boolean(element && shown(element) && !clipped(element) && !occluded(element));
+        const follows = (before, after) => Boolean(before && after
+          && (before.compareDocumentPosition(after) & Node.DOCUMENT_POSITION_FOLLOWING));
+        const expectedText = (element, text) => Boolean(element && element.textContent === text);
+        const relationshipResults = {};
+
+        if (input.contentKind === "datum") {
+          const label = oneFact("datum.label");
+          const value = oneFact("datum.value");
+          relationshipResults["datum.label-value"] = usable(label) && usable(value)
+            && label.closest("section") === value.closest("section") && follows(label, value);
+        } else if (input.contentKind === "matrix") {
+          const tables = [...document.querySelectorAll("table")].filter(shown);
+          const table = tables.length === 1 ? tables[0] : null;
+          const headers = table ? [...table.querySelectorAll(":scope > thead th[scope=col]")] : [];
+          const rows = table ? [...table.querySelectorAll(":scope > tbody > tr")] : [];
+          relationshipResults["matrix.column-headers"] = headers.length === input.props.columns.length
+            && headers.every((header, index) => usable(header)
+              && header.getAttribute("data-std-fact") === `matrix.columns.${index}`
+              && expectedText(header, input.props.columns[index]));
+          relationshipResults["matrix.row-headers"] = rows.length === input.props.rows.length
+            && rows.every((row, index) => {
+              const header = row.querySelector(":scope > th:first-child");
+              return header?.scope === "row" && usable(header)
+                && header.getAttribute("data-std-fact") === `matrix.rows.${index}.label`
+                && expectedText(header, input.props.rows[index].label);
+            });
+          relationshipResults["matrix.grid"] = rows.length === input.props.rows.length
+            && rows.every((row, rowIndex) => {
+              const cells = [...row.children];
+              return cells.length === input.props.columns.length + 1
+                && cells[0].tagName === "TH"
+                && cells.slice(1).every((cell, columnIndex) => cell.tagName === "TD" && usable(cell)
+                  && cell.getAttribute("data-std-fact") === `matrix.rows.${rowIndex}.values.${columnIndex}`
+                  && expectedText(cell, input.props.rows[rowIndex].values[columnIndex]));
+            });
+        } else if (input.contentKind === "bandStatement") {
+          const statement = oneFact("bandStatement.statement");
+          let darkBand = null;
+          for (let candidate = statement?.parentElement; candidate; candidate = candidate.parentElement) {
+            if (getComputedStyle(candidate).backgroundColor === "rgb(17, 17, 17)") {
+              darkBand = candidate;
+              break;
+            }
+          }
+          relationshipResults["bandStatement.statement"] = usable(statement)
+            && expectedText(statement, input.props.statement) && Boolean(darkBand?.contains(statement));
+        } else if (input.contentKind === "series") {
+          const lists = [...document.querySelectorAll("ol")].filter(shown);
+          const list = lists.find((candidate) => candidate.querySelector('[data-std-fact^="series.periods."]'));
+          const items = list ? [...list.querySelectorAll(":scope > li")] : [];
+          relationshipResults["series.period-order"] = items.length === input.props.periods.length
+            && items.every((item, index) => {
+              const period = oneFact(`series.periods.${index}.period`);
+              return usable(period) && item.contains(period)
+                && expectedText(period, input.props.periods[index].period)
+                && (index === 0 || follows(oneFact(`series.periods.${index - 1}.period`), period));
+            });
+          relationshipResults["series.value-association"] = items.length === input.props.periods.length
+            && items.every((item, index) => {
+              const period = oneFact(`series.periods.${index}.period`);
+              const display = oneFact(`series.periods.${index}.display`);
+              return usable(period) && usable(display) && item.contains(period) && item.contains(display)
+                && expectedText(display, input.props.periods[index].display) && follows(period, display);
+            });
+        } else if (input.contentKind === "schedule") {
+          const scheduleColumns = { ref: "REF", description: "DESCRIPTION",
+            duration: "DURATION", amount: "AMOUNT", ...(input.props.columns ?? {}) };
+          const tables = [...document.querySelectorAll("table")].filter(shown);
+          const table = tables.length === 1 ? tables[0] : null;
+          const caption = table?.querySelector(":scope > caption");
+          const headers = table ? [...table.querySelectorAll(":scope > thead > tr:first-child > th")] : [];
+          const rows = table ? [...table.querySelectorAll(":scope > tbody > tr")] : [];
+          const footers = table ? [...table.querySelectorAll(":scope > tfoot")] : [];
+          const footerRows = footers.length === 1
+            ? [...footers[0].children].filter((child) => child.tagName === "TR") : [];
+          const footerCells = footerRows.length === 1 ? [...footerRows[0].children] : [];
+          const noSpan = (cell) => cell.colSpan === 1 && cell.rowSpan === 1;
+          const durationBeforeAmount = (duration, amount) => {
+            if (!duration || !amount) return false;
+            const durationBounds = duration.getBoundingClientRect();
+            const amountBounds = amount.getBoundingClientRect();
+            const verticalOverlap = Math.min(durationBounds.bottom, amountBounds.bottom)
+              - Math.max(durationBounds.top, amountBounds.top);
+            return durationBounds.width > 0 && durationBounds.height > 0
+              && amountBounds.width > 0 && amountBounds.height > 0
+              && durationBounds.left < amountBounds.left && verticalOverlap > 0;
+          };
+          const columnNames = ["ref", "description", "duration", "amount"];
+          relationshipResults["schedule.named-table"] = Boolean(table && usable(caption)
+            && caption.getAttribute("data-std-fact") === "schedule.label"
+            && expectedText(caption, input.props.label));
+          relationshipResults["schedule.column-headers"] = headers.length === 4
+            && headers.every((header, index) => header.scope === "col" && noSpan(header) && usable(header)
+              && header.getAttribute("data-std-fact") === `schedule.columns.${columnNames[index]}`
+              && expectedText(header, scheduleColumns[columnNames[index]]));
+          relationshipResults["schedule.row-headers"] = rows.length === input.props.lines.length
+            && rows.every((row, index) => {
+              const header = row.querySelector(":scope > th:first-child");
+              return header?.scope === "row" && usable(header)
+                && header.getAttribute("data-std-fact") === `schedule.lines.${index}.ref`
+                && expectedText(header, input.props.lines[index].ref);
+            });
+          relationshipResults["schedule.numeric-order"] = rows.length > 0
+            && rows.every((row) => durationBeforeAmount(row.children[2], row.children[3]))
+            && (input.props.total === undefined || (footerCells.length === 3
+              && durationBeforeAmount(footerCells[1], footerCells[2])));
+          relationshipResults["schedule.footer"] = input.props.total === undefined
+            ? footers.length === 0
+            : footers.length === 1 && footerCells.length === 3 && footerCells[0].tagName === "TH"
+              && footerCells[0].scope === "row" && footerCells[0].colSpan === 2 && footerCells[0].rowSpan === 1
+              && footerCells.slice(1).every((cell) => cell.tagName === "TD" && noSpan(cell));
+        } else if (input.contentKind === "runningIndex") {
+          const navs = [...document.querySelectorAll("nav")].filter(shown);
+          const nav = navs.find((candidate) => candidate.querySelector('[data-std-fact^="runningIndex.sections."]'));
+          const items = nav ? [...nav.querySelectorAll(":scope > ol > li")] : [];
+          relationshipResults["runningIndex.section-order"] = items.length === input.props.sections.length
+            && items.every((item, index) => {
+              const number = oneFact(`runningIndex.numbers.${index}`);
+              const section = oneFact(`runningIndex.sections.${index}`);
+              return usable(number) && usable(section) && item.contains(number) && item.contains(section)
+                && expectedText(number, String(index + 1)) && follows(number, section)
+                && expectedText(section, input.props.sections[index])
+                && (index === 0 || follows(oneFact(`runningIndex.sections.${index - 1}`), section));
+            });
+          const current = input.props.current;
+          const selected = items.filter((item) => item.getAttribute("aria-current") === "step");
+          relationshipResults["runningIndex.current-section"] = current === undefined
+            ? items.length === input.props.sections.length && selected.length === 0
+            : items.length === input.props.sections.length && selected.length === 1
+              && items[current - 1]?.getAttribute("aria-current") === "step"
+              && items.every((item, index) => index === current - 1
+                || item.getAttribute("aria-current") === null);
+        }
+        const semanticChecks = { move: input.move,
+          oneVisibleH1: visibleHeadings.length === 1 && Boolean(visibleHeadings[0].textContent.trim()),
+          relationships: input.requiredRelationships.map((id) => ({ id, passed: relationshipResults[id] === true })) };
         hitTestStyle.remove();
         return {
           document: { clientWidth: document.documentElement.clientWidth, clientHeight: document.documentElement.clientHeight,
             scrollWidth: document.documentElement.scrollWidth, scrollHeight: document.documentElement.scrollHeight },
           bodyTextLength, overflowingElements, facts, unmarkedText, invariantBand,
-          semanticChecks: { tableCount: tables.length,
-            oneVisibleH1: visibleHeadings.length === 1
-              && Boolean(visibleHeadings[0].textContent.trim()),
-            numericColumnOrder,
-            namedTable: Boolean((caption?.textContent || "").trim()
-              && caption?.getAttribute("data-std-fact") === "schedule.label"),
-            captionOrLabel: Boolean((caption?.textContent || "").trim()
-              && caption?.getAttribute("data-std-fact") === "schedule.label"),
-            columnHeaders: columnHeaders.length === 4
-              && columnHeaders.every((header) => header.scope === "col" && header.textContent.trim() && noSpan(header)),
-            rowHeaders: rows.length > 0 && rows.every((row) => {
-              const header = row.querySelector(":scope > th:first-child");
-              return header?.scope === "row" && Boolean(header.textContent.trim());
-            }),
-            bodyGrid: rows.length > 0 && rows.every((row) => {
-              const cells = [...row.children];
-              return cells.length === 4 && cells[0].tagName === "TH" && cells.slice(1).every((cell) => cell.tagName === "TD")
-                && cells.every(noSpan);
-            }),
-            footerStructure: expectsFooter
-              ? footers.length === 1 && footerCells.length === 3 && footerCells[0].tagName === "TH"
-                && footerCells[0].scope === "row" && footerCells[0].colSpan === 2 && footerCells[0].rowSpan === 1
-                && footerCells.slice(1).every((cell) => cell.tagName === "TD" && noSpan(cell))
-              : footers.length === 0 },
+          semanticChecks,
         };
-      }, expectsFooter);
-      const screenshotFile = `schedule-${viewport.width}x${viewport.height}.png`;
+      }, inspection);
+      const factOrder = new Map(plan.facts.map((fact, index) => [fact.id, index]));
+      observed.facts.sort((left, right) => (factOrder.get(left.id) ?? Number.MAX_SAFE_INTEGER)
+        - (factOrder.get(right.id) ?? Number.MAX_SAFE_INTEGER));
+      const screenshotFile = `${plan.content.kind}-${viewport.width}x${viewport.height}.png`;
       const screenshotPath = join(outDir, screenshotFile);
       const fullPage = observed.document.scrollHeight <= 20_000
         && observed.document.scrollHeight * observed.document.scrollWidth <= 40_000_000;

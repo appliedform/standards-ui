@@ -1,6 +1,6 @@
 {
   "name": "@standards/instrument",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "Instrument — technical modernism. A Standards pack, from Applied Form.",
   "license": "MIT AND CC-BY-4.0",
   "repository": {
@@ -19,6 +19,9 @@
     },
     "./styles/tokens.css": "./dist/styles/tokens.css",
     "./dist/styles/tokens.css": "./dist/styles/tokens.css",
+    "./styles/fonts.css": "./dist/styles/fonts.css",
+    "./dist/styles/fonts.css": "./dist/styles/fonts.css",
+    "./fonts/*": "./dist/fonts/*",
     "./tokens.json": "./tokens.json",
     "./archetypes.json": "./archetypes.json",
     "./package.json": "./package.json"
@@ -26,5 +29,5 @@
   "files": ["dist", "tokens.json", "archetypes.json", "README.md", "LICENSE", "LICENSE-INSTRUMENT", "NOTICE"],
   "sideEffects": ["**/*.css"],
   "peerDependencies": { "react": ">=18" },
-  "dependencies": { "@standards/core": "0.1.0" }
+  "dependencies": { "@standards/core": "0.2.0" }
 }

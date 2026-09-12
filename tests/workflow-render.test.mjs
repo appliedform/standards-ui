@@ -6,15 +6,16 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import test from "node:test";
 import { chromium } from "playwright";
-import { canonical, expectedFacts, rendererIdentity } from "../scripts/workflow-render.mjs";
+import { canonical, expectedFacts, inspectArtifact, renderPlan, rendererIdentity } from "../scripts/workflow-render.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 const RENDERER_IDENTITY = await rendererIdentity();
 
-test("renderer identity binds the complete installed browser payload", () => {
+test("renderer identity binds the complete installed browser payload", async () => {
   assert.match(RENDERER_IDENTITY.browserLauncherSha256, /^[0-9a-f]{64}$/);
   assert.match(RENDERER_IDENTITY.browserPayloadSha256, /^[0-9a-f]{64}$/);
+  assert.equal(RENDERER_IDENTITY.supportManifestSha256, sha256(await readFile(path.join(ROOT, "support-manifest.json"))));
 });
 
 function scheduleFacts(title, props) {
@@ -36,6 +37,187 @@ function scheduleFacts(title, props) {
   return facts;
 }
 
+function relationship(viewport, id) {
+  return viewport.semanticChecks.relationships.find((item) => item.id === id)?.passed;
+}
+
+function factsFor(title, kind, data) {
+  const facts = [{ id: "title", text: title }];
+  const add = (suffix, text) => facts.push({ id: `${kind}.${suffix}`, text });
+  if (kind === "datum") {
+    add("label", data.label); add("value", data.value);
+    if (data.unit) add("unit", data.unit);
+    data.supporting?.forEach((item, index) => {
+      add(`supporting.${index}.term`, item.term); add(`supporting.${index}.value`, item.value);
+    });
+    if (data.note) add("note", data.note);
+  } else if (kind === "matrix") {
+    add("label", data.label);
+    data.columns.forEach((value, index) => add(`columns.${index}`, value));
+    data.rows.forEach((row, rowIndex) => {
+      add(`rows.${rowIndex}.label`, row.label);
+      row.values.forEach((value, columnIndex) => add(`rows.${rowIndex}.values.${columnIndex}`, value));
+    });
+    if (data.note) add("note", data.note);
+  } else if (kind === "bandStatement") {
+    if (data.label) add("label", data.label);
+    add("statement", data.statement);
+    data.figures?.forEach((item, index) => {
+      add(`figures.${index}.term`, item.term); add(`figures.${index}.value`, item.value);
+    });
+    if (data.note) add("note", data.note);
+  } else if (kind === "series") {
+    add("label", data.label);
+    add("zero", "0");
+    data.periods.forEach((item, index) => {
+      add(`periods.${index}.period`, item.period); add(`periods.${index}.display`, item.display);
+    });
+    data.summary?.forEach((item, index) => {
+      add(`summary.${index}.term`, item.term); add(`summary.${index}.value`, item.value);
+    });
+    if (data.note) add("note", data.note);
+    if (data.emphasiseLast !== false) add("current", "Current");
+  } else if (kind === "schedule") {
+    return scheduleFacts(title, { ...data, factPrefix: "schedule" });
+  } else if (kind === "runningIndex") {
+    add("document", data.document); add("folio", data.folio);
+    data.sections.forEach((value, index) => {
+      add(`numbers.${index}`, String(index + 1)); add(`sections.${index}`, value);
+    });
+    if (data.note) add("note", data.note);
+  }
+  return facts;
+}
+
+const SUPPORT = JSON.parse(await readFile(path.join(ROOT, "support-manifest.json"), "utf8"));
+
+function movePlan(kind, data, title = `${kind} workflow fixture`) {
+  const support = SUPPORT.supported.find((entry) => entry.contentKind === kind);
+  assert.ok(support, `missing support manifest entry for ${kind}`);
+  return {
+    schemaVersion: SUPPORT.workflow.version, system: SUPPORT.system.slug,
+    job: support.job, move: support.move, content: { kind, data: structuredClone(data) },
+    artifact: { format: "html", title, viewports: [{ width: 640, height: 720 }] },
+    context: { build: "full", reason: "Explicit multi-move renderer test" },
+    selection: { reason: "Contract fixture", trigger: "Contract fixture", alternatives: [] },
+    binding: { package: support.binding.package, packageVersion: support.binding.packageVersion,
+      component: support.binding.component, props: { ...structuredClone(data), factPrefix: support.binding.factPrefix } },
+    renderer: RENDERER_IDENTITY, facts: factsFor(title, kind, data),
+    requiredRelationships: structuredClone(support.requiredRelationships),
+    rules: ["plan.valid"], maxRepairTurns: SUPPORT.workflow.maxRepairTurns,
+    source: { systemVersion: SUPPORT.system.contentVersion, schemaVersion: SUPPORT.system.contentSchemaVersion,
+      supportManifestSha256: RENDERER_IDENTITY.supportManifestSha256,
+      files: { "SOURCE.md": "0".repeat(64) }, implementation: { "workflow/engine.py": "1".repeat(64) } },
+    limitations: ["Test fixture"],
+  };
+}
+
+test("renders all six manifest surfaces with exact fact and relationship evidence", async () => {
+  const fixtures = {
+    datum: { label: "Mean tensile strength", value: "1,240", unit: "MPa",
+      supporting: [{ term: "n", value: "24" }], note: "Approved batch R-118." },
+    matrix: { label: "Option assessment", columns: ["Reach", "Effort"],
+      rows: [{ label: "Alpha", values: ["High", "Low"] }, { label: "Beta", values: ["Medium", "High"] }],
+      emphasis: [0, 0], note: "Assessment at discovery close." },
+    bandStatement: { label: "Decision", statement: "Ship the smallest complete system.",
+      figures: [{ term: "Moves", value: "6" }], note: "Subject to design review.", bleed: 32 },
+    series: { label: "Monthly retained revenue", periods: [
+      { period: "January", value: 18, display: "£18k" },
+      { period: "February", value: 24, display: "£24k" },
+    ], emphasiseLast: true, summary: [{ term: "Change", value: "+£6k" }], height: 200,
+    note: "Nominal values." },
+    schedule: { label: "Launch scope", columns: { ref: "REF", description: "DESCRIPTION",
+      duration: "DURATION", amount: "AMOUNT" }, lines: [
+      { ref: "01", description: "Compatibility pass", duration: "2 days", amount: "£800" },
+    ], total: { label: "Total", duration: "2 days", amount: "£800" }, note: "Excludes VAT." },
+    runningIndex: { document: "System handbook", folio: "04 / 12",
+      sections: ["Principles", "Components", "Examples"], current: 2, note: "Current approved issue." },
+  };
+  assert.deepEqual(Object.keys(fixtures), SUPPORT.supported.map((entry) => entry.contentKind));
+  for (const [kind, data] of Object.entries(fixtures)) {
+    const fixture = movePlan(kind, data);
+    fixture.artifact.viewports = [{ width: 1280, height: 960 }, { width: 390, height: 844 }];
+    assert.doesNotThrow(() => expectedFacts(fixture));
+    const html = await renderPlan(fixture);
+    assert.match(html, new RegExp(`data-std-fact="${kind.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\.`));
+    assert.doesNotMatch(html, /<link\b|url\(\s*https?:/i);
+    const directory = await mkdtemp(path.join(os.tmpdir(), `standards-${kind}-`));
+    const evidence = await inspectArtifact(fixture, html, directory);
+    assert.equal(evidence.schemaVersion, SUPPORT.renderer.evidenceVersion);
+    assert.equal(evidence.renderer.supportManifestSha256, RENDERER_IDENTITY.supportManifestSha256);
+    for (const viewport of evidence.viewports) {
+      assert.deepEqual(viewport.pageErrors, []);
+      assert.deepEqual(viewport.blockedRequests, []);
+      assert.deepEqual(viewport.overflowingElements, [], `${kind} overflows at ${viewport.width}px`);
+      assert.deepEqual(viewport.unmarkedText, [], `${kind} has unmarked visible text at ${viewport.width}px`);
+      assert.equal(viewport.semanticChecks.move, fixture.move);
+      assert.equal(viewport.semanticChecks.oneVisibleH1, true);
+      assert.deepEqual(viewport.semanticChecks.relationships,
+        fixture.requiredRelationships.map((id) => ({ id, passed: true })));
+      assert.deepEqual(viewport.facts.map(({ id, text }) => ({ id, text })), fixture.facts);
+      assert.ok(viewport.facts.every((fact) => fact.visible && !fact.clipped && !fact.occluded),
+        `${kind}/${viewport.width}: ${JSON.stringify(viewport.facts.filter((fact) => !fact.visible || fact.clipped || fact.occluded))}`);
+    }
+  }
+});
+
+test("keeps a hard-case fixture for every supported move complete at 320px", async () => {
+  const cases = {
+    datum: { label: "Verified annual recurring revenue", value: "£1,240,000", unit: "GBP",
+      supporting: [{ term: "Accounts", value: "128" }, { term: "Growth", value: "+24%" },
+        { term: "Churn", value: "2.1%" }, { term: "Period", value: "FY 2026" }],
+      note: "Figures are synthetic and shown to test the complete mobile surface." },
+    matrix: { label: "Platform option assessment", columns: ["Reach", "Effort", "Risk", "Time"], rows: [
+      { label: "Focused", values: ["High", "Low", "Low", "4 weeks"] },
+      { label: "Broad", values: ["High", "High", "Medium", "12 weeks"] },
+      { label: "Custom", values: ["Medium", "High", "High", "8 weeks"] },
+    ], emphasis: [0, 0], note: "All four dimensions remain associated with each option." },
+    bandStatement: { label: "Operating position",
+      statement: "One coherent source should produce every approved customer-facing artifact.",
+      figures: [{ term: "Surfaces", value: "6" }, { term: "Formats", value: "1" },
+        { term: "Requests", value: "0" }, { term: "Repairs", value: "≤2" }],
+      note: "Statement and figures are synthetic acceptance data.", bleed: 32 },
+    series: { label: "Qualified opportunities", periods: [
+      { period: "Q1", value: -12, display: "−12" }, { period: "Q2", value: 0, display: "0" },
+      { period: "Q3", value: 18, display: "+18" }, { period: "Q4", value: 31, display: "+31" },
+    ], emphasiseLast: true, summary: [{ term: "Net change", value: "+43" },
+      { term: "Current", value: "31" }], height: 240,
+    note: "Signed values exercise both sides of the visible zero baseline." },
+    schedule: { label: "Implementation scope and professional fees",
+      columns: { ref: "PROJECT REF", description: "DELIVERABLE", duration: "DELIVERY TIME", amount: "FEE" },
+      lines: [
+        { ref: "AF-01", description: "Source audit and acceptance map",
+          standard: "Includes six declared component surfaces and evidence requirements.", duration: "8 working days", amount: "£8,750" },
+        { ref: "AF-02", description: "Renderer integration and compatibility pass",
+          standard: "Includes desktop and narrow-screen mechanical evidence.", duration: "4 working weeks", amount: "£24,500" },
+      ], total: { label: "Total · excluding VAT", duration: "6 working weeks", amount: "£33,250" },
+      note: "Dates depend on approved source material and consolidated review feedback." },
+    runningIndex: { document: "Standards implementation handbook", folio: "08 / 24",
+      sections: ["Purpose", "Principles", "Evidence", "Structure", "Narrative", "Change", "Transaction", "Wayfinding"],
+      current: 8, note: "The active section remains explicit without relying on colour alone." },
+  };
+  for (const [kind, data] of Object.entries(cases)) {
+    const fixture = movePlan(kind, data, `${kind} narrow acceptance fixture`);
+    fixture.artifact.viewports = [{ width: 320, height: 844 }];
+    const html = await renderPlan(fixture);
+    const directory = await mkdtemp(path.join(os.tmpdir(), `standards-${kind}-320-`));
+    const evidence = await inspectArtifact(fixture, html, directory);
+    const viewport = evidence.viewports[0];
+    assert.equal(viewport.document.clientWidth, 320);
+    assert.equal(viewport.document.scrollWidth, 320, `${kind} widens the 320px document`);
+    assert.deepEqual(viewport.overflowingElements, [], `${kind} has horizontal overflow`);
+    assert.deepEqual(viewport.unmarkedText, [], `${kind} has unapproved visible text`);
+    assert.deepEqual(viewport.pageErrors, []);
+    assert.deepEqual(viewport.blockedRequests, []);
+    assert.deepEqual(viewport.semanticChecks.relationships,
+      fixture.requiredRelationships.map((id) => ({ id, passed: true })),
+      `${kind}: ${JSON.stringify(viewport.facts)}`);
+    assert.deepEqual(viewport.facts.map(({ id, text }) => ({ id, text })), fixture.facts);
+    assert.ok(viewport.facts.every((fact) => fact.visible && !fact.clipped && !fact.occluded),
+      `${kind}: ${JSON.stringify(viewport.facts.filter((fact) => !fact.visible || fact.clipped || fact.occluded))}`);
+  }
+});
+
 function plan() {
   const title = "Content system proposal";
   const props = {
@@ -49,16 +231,22 @@ function plan() {
     note: "The client supplies approved source material before work begins.", factPrefix: "schedule",
   };
   const facts = scheduleFacts(title, props);
-  return { schemaVersion: "0.1.0", system: "instrument", job: "T", move: "Schedule",
+  const data = structuredClone(props);
+  delete data.factPrefix;
+  return { schemaVersion: "0.2.0", system: "instrument", job: "T", move: "Schedule",
+    content: { kind: "schedule", data },
     artifact: { format: "html", title, viewports: [
       { width: 960, height: 720 }, { width: 390, height: 844 }, { width: 320, height: 844 },
     ] },
     context: { build: "full", reason: "Explicit test choice" },
     selection: { reason: "Precision is the persuasion", trigger: "Scope, cost or duration must be stated exactly", alternatives: [] },
-    binding: { package: "@standards/instrument", packageVersion: "1.0.0", component: "Schedule", props }, facts,
+    binding: { package: "@standards/instrument", packageVersion: "2.0.0", component: "Schedule", props }, facts,
     renderer: RENDERER_IDENTITY,
+    requiredRelationships: ["schedule.named-table", "schedule.column-headers", "schedule.row-headers", "schedule.numeric-order", "schedule.footer"],
     rules: ["plan.valid"], maxRepairTurns: 2,
-    source: { systemVersion: "1.0.0", schemaVersion: "v0.4", files: { "SOURCE.md": "0".repeat(64) }, implementation: { "workflow/engine.py": "1".repeat(64) } },
+    source: { systemVersion: "1.0.0", schemaVersion: "v0.4",
+      supportManifestSha256: RENDERER_IDENTITY.supportManifestSha256,
+      files: { "SOURCE.md": "0".repeat(64) }, implementation: { "workflow/engine.py": "1".repeat(64) } },
     limitations: ["Test fixture"] };
 }
 
@@ -95,6 +283,8 @@ function longContentPlan() {
   };
   fixture.artifact = { format: "html", title, viewports: [{ width: 320, height: 844 }] };
   fixture.binding = { ...fixture.binding, props };
+  fixture.content = { kind: "schedule", data: structuredClone(props) };
+  delete fixture.content.data.factPrefix;
   fixture.facts = scheduleFacts(title, props);
   fixture.limitations = ["Long-content narrow-screen regression fixture"];
   return fixture;
@@ -304,7 +494,9 @@ test("renders the allowlisted Schedule and records complete desktop/mobile evide
   for (const family of ["public-sans", "dm-mono"]) {
     const encoded = html.match(new RegExp(`<meta name="standards-font-license:${family}" data-encoding="base64" content="([A-Za-z0-9+/=]+)">`))?.[1];
     assert.ok(encoded);
-    assert.deepEqual(Buffer.from(encoded, "base64"), await readFile(path.join(ROOT, `node_modules/@fontsource/${family}/LICENSE`)));
+    const file = family === "public-sans" ? "OFL-Public-Sans.txt" : "OFL-DM-Mono.txt";
+    assert.deepEqual(Buffer.from(encoded, "base64"),
+      await readFile(path.join(ROOT, "packages/instrument/dist/fonts", file)));
   }
   assert.equal(evidence.planSha256, sha256(Buffer.from(canonical(fixture), "utf8")));
   assert.equal(evidence.artifactSha256, sha256(Buffer.from(html, "utf8")));
@@ -315,13 +507,10 @@ test("renders the allowlisted Schedule and records complete desktop/mobile evide
     assert.deepEqual(viewport.blockedRequests, []);
     assert.deepEqual(viewport.unmarkedText, []);
     assert.deepEqual(viewport.invariantBand, expectedInvariantBand(viewport));
-    assert.equal(viewport.semanticChecks.tableCount, 1);
+    assert.equal(viewport.semanticChecks.move, "Schedule");
     assert.equal(viewport.semanticChecks.oneVisibleH1, true);
-    assert.equal(viewport.semanticChecks.numericColumnOrder, true);
-    assert.equal(viewport.semanticChecks.columnHeaders, true);
-    assert.equal(viewport.semanticChecks.rowHeaders, true);
-    assert.equal(viewport.semanticChecks.bodyGrid, true);
-    assert.equal(viewport.semanticChecks.footerStructure, true);
+    assert.deepEqual(viewport.semanticChecks.relationships,
+      fixture.requiredRelationships.map((id) => ({ id, passed: true })));
     assert.equal(viewport.facts.length, fixture.facts.length);
     assert.ok(viewport.facts.every((fact) => fact.visible && !fact.clipped
       && !fact.occluded && fact.contrastRatio >= 4.5));
@@ -348,6 +537,7 @@ test("renders and verifies the valid Schedule variant without a total row", asyn
   const fixture = plan();
   fixture.artifact.viewports = [{ width: 640, height: 720 }];
   delete fixture.binding.props.total;
+  delete fixture.content.data.total;
   fixture.facts = scheduleFacts(fixture.artifact.title, fixture.binding.props);
   assert.doesNotThrow(() => expectedFacts(fixture));
   await writeFile(planPath, JSON.stringify(fixture));
@@ -355,7 +545,7 @@ test("renders and verifies the valid Schedule variant without a total row", asyn
   const html = await readFile(summary.artifact, "utf8");
   const evidence = JSON.parse(await readFile(summary.evidence, "utf8"));
   assert.doesNotMatch(html, /<tfoot\b/i);
-  assert.equal(evidence.viewports[0].semanticChecks.footerStructure, true);
+  assert.equal(relationship(evidence.viewports[0], "schedule.footer"), true);
   assert.equal(evidence.viewports[0].facts.length, fixture.facts.length);
 
   const emptyFooterPath = path.join(directory, "empty-footer.html");
@@ -363,7 +553,7 @@ test("renders and verifies the valid Schedule variant without a total row", asyn
   await writeFile(emptyFooterPath, html.replace("</table>", "<tfoot></tfoot></table>"));
   const inspected = runRenderer(["--plan", planPath, "--html", emptyFooterPath, "--out", emptyFooterOutput]);
   const emptyFooterEvidence = JSON.parse(await readFile(inspected.evidence, "utf8"));
-  assert.equal(emptyFooterEvidence.viewports[0].semanticChecks.footerStructure, false);
+  assert.equal(relationship(emptyFooterEvidence.viewports[0], "schedule.footer"), false);
 });
 
 test("derives the invariant band from its treatment rather than renderer class names", async () => {
@@ -438,7 +628,7 @@ test("records numeric columns moved out of visual order by CSS", async () => {
   const inspected = runRenderer(["--plan", planPath, "--html", swappedPath,
     "--out", path.join(directory, "swapped-output")]);
   const evidence = JSON.parse(await readFile(inspected.evidence, "utf8"));
-  assert.ok(evidence.viewports.every((viewport) => !viewport.semanticChecks.numericColumnOrder));
+  assert.ok(evidence.viewports.every((viewport) => !relationship(viewport, "schedule.numeric-order")));
 });
 
 test("records whether the artifact has exactly one visible nonblank h1", async () => {
@@ -683,4 +873,27 @@ test("rejects plans whose fact ledger differs from component props", () => {
   const fixture = plan();
   fixture.facts.at(-1).text = "Changed after planning";
   assert.throws(() => expectedFacts(fixture), /facts differ/);
+});
+
+test("rejects unsupported or malformed move bindings before rendering", () => {
+  const unsupported = movePlan("datum", { label: "Evidence", value: "24" });
+  unsupported.move = "Schedule";
+  assert.throws(() => expectedFacts(unsupported), /outside the canonical support manifest/);
+
+  const series = movePlan("series", { label: "Run rate", periods: [
+    { period: "January", value: 1, display: "1" }, { period: "February", value: 2, display: "2" },
+  ] });
+  delete series.binding.props.periods[0].display;
+  delete series.content.data.periods[0].display;
+  assert.throws(() => expectedFacts(series), /missing display/);
+
+  const matrix = movePlan("matrix", { label: "Fit", columns: ["A", "B"],
+    rows: [{ label: "One", values: ["Yes", "No"] }] });
+  matrix.binding.props.rows[0].values.pop();
+  matrix.content.data.rows[0].values.pop();
+  assert.throws(() => expectedFacts(matrix), /must contain 2 to 8 items/);
+
+  const stale = plan();
+  stale.source.supportManifestSha256 = "f".repeat(64);
+  assert.throws(() => expectedFacts(stale), /source identity differs/);
 });

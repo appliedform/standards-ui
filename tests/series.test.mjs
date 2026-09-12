@@ -20,7 +20,7 @@ function text(node) {
 function chart(values, props = {}) {
   const output = Series({
     label: "Operating balance",
-    periods: values.map((value, i) => ({ period: `P${i + 1}`, value })),
+    periods: values.map((value, i) => ({ period: `P${i + 1}`, value, display: String(value) })),
     ...props,
   });
   const nodes = elements(output);
@@ -110,8 +110,8 @@ test("non-finite observations are unavailable, not zero or custom-display measur
   const result = chart([], {
     periods: [
       { period: "NaN input", value: NaN, display: "Invented measurement" },
-      { period: "Infinite input", value: Infinity },
-      { period: "Negative infinite input", value: -Infinity },
+      { period: "Infinite input", value: Infinity, display: "Infinity" },
+      { period: "Negative infinite input", value: -Infinity, display: "-Infinity" },
       { period: "Measured", value: 3, display: "3 kg" },
     ],
   });
@@ -186,7 +186,8 @@ test("period/value text, custom displays, supporting figures and note survive th
   });
   const list = result.nodes.find((n) => n.type === "ol");
   assert.equal(list.props["aria-label"], "Operating balance: values by period");
-  assert.equal(result.plot.props["aria-hidden"], "true");
+  assert.equal(result.plot.props["aria-hidden"], undefined);
+  assert.equal(result.zero.props["aria-hidden"], "true");
   assert.match(text(result.items[0]), /January −£24,000 Current/);
   assert.match(text(result.output), /Cumulative £10,000/);
   assert.match(text(result.output), /Synthetic fixture; no causal attribution\./);

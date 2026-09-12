@@ -1,8 +1,7 @@
 /* Instrument — design tokens. A Standards pack, from Applied Form.
-   Technical modernism. Paste into any project.
-   Open-licence type only: Public Sans + DM Mono, both Google Fonts.
-   https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;600;800&family=DM+Mono:wght@400;500&display=swap */
-:root{
+   Technical modernism. Import this stylesheet and wrap each Instrument surface
+   in [data-standards-pack="instrument"]. Tokens never enter the host root. */
+[data-standards-pack="instrument"]{
   /* palette — five colours, no sixth */
   --ground:#FFFFFF;
   --ink:#111111;
@@ -26,24 +25,35 @@
 
 /* Chromium rounds fractional borders, so the Schedule uses a measured,
    empty table row for its exact 1.5px header rule. */
-.instrument-schedule .instrument-schedule-header-rule,
-.instrument-schedule .instrument-schedule-header-rule td{
+[data-standards-pack="instrument"] .instrument-schedule .instrument-schedule-header-rule,
+[data-standards-pack="instrument"] .instrument-schedule .instrument-schedule-header-rule td{
   height:1.5px;padding:0;background:var(--ink)
+}
+
+[data-standards-pack="instrument"] .instrument-matrix{
+  table-layout:fixed
+}
+[data-standards-pack="instrument"] .instrument-matrix th,
+[data-standards-pack="instrument"] .instrument-matrix td{
+  overflow-wrap:anywhere
 }
 
 /* Preserve readable table facts when a Schedule reaches a narrow handset. */
 @media (max-width:639px){
-  .instrument-schedule,
-  .instrument-schedule caption,
-  .instrument-schedule thead,
-  .instrument-schedule tbody,
-  .instrument-schedule tfoot{display:block;width:100%}
-  .instrument-schedule tr{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));width:100%}
-  .instrument-schedule th,
-  .instrument-schedule td{min-width:0;overflow-wrap:normal;word-break:normal}
-  .instrument-schedule tr.instrument-schedule-header-rule{grid-template-columns:1fr;height:1.5px}
-  .instrument-schedule .instrument-schedule-header-rule td{grid-column:1/-1}
-  .instrument-schedule tfoot th:first-child{grid-column:1/-1}
+  [data-standards-pack="instrument"] .instrument-matrix thead th:first-child{width:64px!important}
+  [data-standards-pack="instrument"] .instrument-matrix th,
+  [data-standards-pack="instrument"] .instrument-matrix td{padding-left:8px!important;padding-right:8px!important}
+  [data-standards-pack="instrument"] .instrument-schedule,
+  [data-standards-pack="instrument"] .instrument-schedule caption,
+  [data-standards-pack="instrument"] .instrument-schedule thead,
+  [data-standards-pack="instrument"] .instrument-schedule tbody,
+  [data-standards-pack="instrument"] .instrument-schedule tfoot{display:block;width:100%}
+  [data-standards-pack="instrument"] .instrument-schedule tr{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));width:100%}
+  [data-standards-pack="instrument"] .instrument-schedule th,
+  [data-standards-pack="instrument"] .instrument-schedule td{min-width:0;overflow-wrap:normal;word-break:normal}
+  [data-standards-pack="instrument"] .instrument-schedule tr.instrument-schedule-header-rule{grid-template-columns:1fr;height:1.5px}
+  [data-standards-pack="instrument"] .instrument-schedule .instrument-schedule-header-rule td{grid-column:1/-1}
+  [data-standards-pack="instrument"] .instrument-schedule tfoot th:first-child{grid-column:1/-1}
 }
 /* Series colours: ink and muted only. Data marks never use signal.
    A selected datum may use one signal rule beside a neutral label, with an

@@ -16,6 +16,10 @@ https://github.com/appliedform/standards/tree/main/packs/instrument
 React implementation source:
 https://github.com/appliedform/standards-ui/tree/main/packages/instrument
 
-Font files are not distributed in this package. InstrumentRoot can request
-Public Sans and DM Mono from Google Fonts; set loadFonts={false} to manage fonts
-in the host application. Font licensing is separate from these package licences.
+The optional files under dist/fonts bundle Public Sans and DM Mono subsets under
+the SIL Open Font License 1.1. Their complete licence texts ship beside the font
+files as OFL-Public-Sans.txt and OFL-DM-Mono.txt. Import dist/styles/fonts.css
+explicitly to use them. InstrumentRoot never requests a network stylesheet.
+
+Public Sans copyright 2015 The Public Sans Project Authors.
+DM Mono copyright 2020 The DM Mono Project Authors.

@@ -12,6 +12,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
+const siblingPublic = join(root, "..", "standards-public");
 const RAW = "https://raw.githubusercontent.com";
 
 // Where each pack's contract is published. Instrument is in the public
@@ -30,11 +31,25 @@ const token = process.env.GITHUB_TOKEN || process.env.GH_TOKEN;
 const fails = [], skipped = [];
 
 async function upstream(entry, file) {
+  const sibling = entry.repo === "appliedform/standards"
+    ? join(siblingPublic, entry.path, file) : null;
+  if (sibling && existsSync(sibling)) return readFileSync(sibling, "utf8");
   const url = `${RAW}/${entry.repo}/main/${entry.path}/${file}`;
   const headers = token ? { Authorization: `Bearer ${token}` } : {};
   const r = await fetch(url, { headers });
   if (!r.ok) throw new Error(`HTTP ${r.status}`);
   return r.text();
+}
+
+// The workflow inventory is canonical in the public foundation and vendored
+// byte-for-byte at the UI root. Formatting is part of its identity hash.
+try {
+  const remote = await upstream({ repo: "appliedform/standards", path: "workflow" }, "support-manifest.json");
+  const local = readFileSync(join(root, "support-manifest.json"), "utf8");
+  if (remote !== local) fails.push("support-manifest.json: vendored bytes differ from appliedform/standards");
+  else console.log("  support      current");
+} catch (error) {
+  fails.push(`support-manifest.json: could not fetch upstream (${error.message})`);
 }
 
 const packs = readdirSync(join(root, "packages")).filter(

@@ -1,9 +1,10 @@
 # Agent workflow renderer
 
 This repository provides the React rendering and browser-observation half of
-the first Standards workflow preview. It accepts the immutable Instrument
-Schedule plan returned by the public foundation. It does not accept arbitrary
-components or execute scripts from supplied HTML.
+the Standards workflow preview. It accepts immutable Instrument plans for the
+six exact job/move pairs declared in the canonical `support-manifest.json`:
+Datum, Matrix, Band statement, Series, Schedule and Running index. It does not
+accept arbitrary components or execute scripts from supplied HTML.
 
 Build the packages, install the pinned browser and export this host's renderer identity:
 
@@ -18,9 +19,14 @@ Then render the resulting host-pinned plan:
 
 ```bash
 npm run workflow:render -- \
-  --plan /tmp/standards-schedule-plan.json \
-  --out .workflow-output/schedule
+  --plan /tmp/standards-plan.json \
+  --out .workflow-output/artifact
 ```
+
+Run the renderer with Node 22 or 24 LTS. It refuses other Node majors and plans
+whose job, move, content kind, binding, version or manifest hash is outside the
+vendored capability contract. `npm run freshness` compares that manifest with
+the public foundation byte for byte.
 
 The output contains static self-contained HTML, a screenshot for every planned
 viewport, and JSON observations bound to the exact plan, artifact, renderer/runtime
@@ -28,7 +34,7 @@ identity and screenshot bytes. The HTML embeds the open fonts and exact base64-e
 licence files, so the render does not make network requests. Evidence covers horizontal
 overflow, clipping, occlusion, minimum text contrast, the invariant title band, compact
 one- or two-line column headings, visual duration/amount order, unapproved visible text,
-table relationships, browser errors and blocked requests.
+the move's declared semantic relationships, browser errors and blocked requests.
 
 The renderer launches Chromium with its sandbox enabled, disables artifact JavaScript,
 blocks every request and bounds DOM, evidence and screenshot work. Use the public checker
