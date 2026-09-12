@@ -202,6 +202,7 @@ test("keeps a hard-case fixture for every supported move complete at 320px", asy
     const html = await renderPlan(fixture);
     const directory = await mkdtemp(path.join(os.tmpdir(), `standards-${kind}-320-`));
     const evidence = await inspectArtifact(fixture, html, directory);
+    const wrapping = await inspectWordWrapping(html);
     const viewport = evidence.viewports[0];
     assert.equal(viewport.document.clientWidth, 320);
     assert.equal(viewport.document.scrollWidth, 320, `${kind} widens the 320px document`);
@@ -209,6 +210,7 @@ test("keeps a hard-case fixture for every supported move complete at 320px", asy
     assert.deepEqual(viewport.unmarkedText, [], `${kind} has unapproved visible text`);
     assert.deepEqual(viewport.pageErrors, []);
     assert.deepEqual(viewport.blockedRequests, []);
+    assert.deepEqual(wrapping.midWordBreaks, [], `${kind} breaks a fact inside a word at 320px`);
     assert.deepEqual(viewport.semanticChecks.relationships,
       fixture.requiredRelationships.map((id) => ({ id, passed: true })),
       `${kind}: ${JSON.stringify(viewport.facts)}`);

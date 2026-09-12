@@ -71,7 +71,7 @@ export const Series = defineMove<SeriesProps>(
                              left: 0, width: 24, lineHeight: "16px", textAlign: "right",
                              fontFamily: "var(--font-data)", fontSize: 11, color: "var(--muted)" }}>0</span>
             </div>
-            <ol aria-labelledby={labelId} aria-label={labelId ? undefined : `${label}: values by period`}
+            <ol className="instrument-series-values" aria-labelledby={labelId} aria-label={labelId ? undefined : `${label}: values by period`}
                 style={{ display: "flex", gap: 16, listStyle: "none", margin: 0, padding: "0 0 0 32px" }}>
               {periods.map((p, i) => {
                 const hot = emphasiseLast && i === periods.length - 1;
@@ -82,7 +82,7 @@ export const Series = defineMove<SeriesProps>(
                     <div data-std-fact={fact(`periods.${i}.display`)} style={{ fontSize: 12, color: "var(--ink)", fontWeight: hot ? 500 : undefined }}>
                       {Number.isFinite(p.value) ? p.display : "Unavailable"}
                     </div>
-                    {hot && <div data-series-current="" data-std-fact={fact("current")} style={{ fontSize: 11, fontWeight: 500,
+                    {hot && <div className="instrument-series-current" data-series-current="" data-std-fact={fact("current")} style={{ fontSize: 11, fontWeight: 500,
                                                                 color: "var(--ink)", display: "inline-block",
                                                                 borderLeft: "4px solid var(--signal)",
                                                                 paddingLeft: 8 }}>Current</div>}

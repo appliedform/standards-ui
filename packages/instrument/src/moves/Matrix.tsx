@@ -40,7 +40,8 @@ export const Matrix = defineMove<MatrixProps>(({ label, columns, rows, emphasis,
             {r.values.map((v, ci) => {
               const hot = emphasis && emphasis[0] === ri && emphasis[1] === ci;
               return (
-                <td key={ci} data-std-fact={fact(`rows.${ri}.values.${ci}`)} data-matrix-emphasis={hot ? "true" : undefined} style={{ fontFamily: "var(--font-data)", fontSize: 15, textAlign: "right",
+                <td key={ci} data-std-fact={fact(`rows.${ri}.values.${ci}`)}
+                    data-matrix-emphasis={hot ? "true" : undefined} style={{ fontFamily: "var(--font-data)", fontSize: 15, textAlign: "right",
                                       padding: "8px 16px", borderTop: "1px solid var(--rule)",
                                       borderLeft: hot ? "4px solid var(--signal)" : undefined,
                                       color: hot ? "var(--signal)" : "var(--ink)",
