@@ -17,15 +17,17 @@ repository root:
 
 ```sh
 npm ci
+npx playwright install chromium
 npm run check
 ```
 
 `check` verifies generated metadata, compares vendored contracts with public upstream
 `main`, builds both packages, audits the contract/materials, and runs the regression
-tests. Initial dependency installation and the upstream freshness check need network
-access. No private repository or token is required for Instrument.
+tests. Initial dependency and browser installation and the upstream freshness check need
+network access. No private repository or token is required for Instrument.
 
-After dependencies are installed, these focused checks work offline:
+After dependencies and the pinned Chromium binary are installed, these focused checks work
+offline:
 
 ```sh
 npm run generate:check

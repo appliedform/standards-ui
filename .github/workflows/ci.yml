@@ -26,7 +26,9 @@ jobs:
           # standards-packs to check the other five as well.
           GITHUB_TOKEN: ${{ secrets.PACKS_READ_TOKEN }}
 
-      - run: npm install --no-audit --no-fund
+      - run: npm ci --no-audit --no-fund
+      - name: Install browser used by rendered workflow checks
+        run: npx playwright install --with-deps chromium
       - run: npm run build
       - run: npm run audit
       - run: npm test

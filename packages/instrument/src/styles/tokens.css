@@ -23,6 +23,28 @@
   /* scale — nothing off it */
   --s1:8px; --s2:16px; --s3:24px; --s4:32px; --s5:48px; --s6:64px; --s7:96px;
 }
+
+/* Chromium rounds fractional borders, so the Schedule uses a measured,
+   empty table row for its exact 1.5px header rule. */
+.instrument-schedule .instrument-schedule-header-rule,
+.instrument-schedule .instrument-schedule-header-rule td{
+  height:1.5px;padding:0;background:var(--ink)
+}
+
+/* Preserve readable table facts when a Schedule reaches a narrow handset. */
+@media (max-width:639px){
+  .instrument-schedule,
+  .instrument-schedule caption,
+  .instrument-schedule thead,
+  .instrument-schedule tbody,
+  .instrument-schedule tfoot{display:block;width:100%}
+  .instrument-schedule tr{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));width:100%}
+  .instrument-schedule th,
+  .instrument-schedule td{min-width:0;overflow-wrap:normal;word-break:normal}
+  .instrument-schedule tr.instrument-schedule-header-rule{grid-template-columns:1fr;height:1.5px}
+  .instrument-schedule .instrument-schedule-header-rule td{grid-column:1/-1}
+  .instrument-schedule tfoot th:first-child{grid-column:1/-1}
+}
 /* Series colours: ink and muted only. Data marks never use signal.
    A selected datum may use one signal rule beside a neutral label, with an
    explicit word or weight cue that remains legible in one colour. */

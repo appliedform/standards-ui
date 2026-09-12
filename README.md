@@ -17,6 +17,10 @@ Instrument is licensed **CC BY 4.0** — see `LICENSE-INSTRUMENT`. The code in t
 repository is MIT. The other systems in the catalogue are proprietary and are not
 part of this repository.
 
+The [agent workflow renderer](examples/agent-workflow/README.md) turns the public
+foundation's first Instrument Schedule plan into static React HTML, captures desktop and
+mobile browser evidence, and leaves design judgement explicitly outside its mechanical pass.
+
 ## The idea
 
 Every Standards pack indexes its components by the **rhetorical job** they do, not
@@ -84,9 +88,11 @@ The plate identifier stays ink, so this cue is the plate's only use of signal re
 ## Build and audit
 
 ```bash
-npm install
+npm ci
+npx playwright install chromium   # pinned browser for rendered workflow checks
 npm run build     # declarations with tsc, ESM bundles with esbuild
 npm run audit     # conformance
+npm run workflow:render -- --plan PLAN.json --out DIRECTORY
 npm test          # built-component regression checks (run build first)
 npm run check     # generation, freshness, build, audit and regression checks
 ```
