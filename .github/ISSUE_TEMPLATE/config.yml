@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security report
+    url: https://github.com/appliedform/standards-ui/security/policy
+    about: Use the private security route for vulnerabilities.
+  - name: Foundation rules and schema
+    url: https://github.com/appliedform/standards/issues/new/choose
+    about: Propose changes to Instrument rules, the schema, compiler or MCP workflow upstream.

@@ -1,0 +1,67 @@
+name: Component, design or accessibility report
+description: Report a reproducible Standards UI problem; code is not required.
+title: "UI: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        A focused design critique or accessibility finding is a complete contribution. Use synthetic or publishable material, and follow CONTRIBUTING.md. Report vulnerabilities through SECURITY.md.
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Contribution type
+      options:
+        - Component behaviour
+        - Responsive design
+        - Accessibility
+        - Host integration
+        - Package consumption
+        - Documentation
+    validations:
+      required: true
+  - type: input
+    id: source
+    attributes:
+      label: Commit or package version
+      description: Include the affected component and public workflow move when applicable.
+    validations:
+      required: true
+  - type: textarea
+    id: task
+    attributes:
+      label: Reader task and fixed input
+      description: Describe what the artifact should help someone understand or do, with the smallest synthetic props or brief that reproduces the problem.
+    validations:
+      required: true
+  - type: textarea
+    id: observed
+    attributes:
+      label: Observed and expected behaviour
+      description: State the concrete failure, expected result, viewport, browser, fonts, zoom and assistive technology where relevant.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction and evidence
+      description: Give exact steps and attach a safe screenshot, DOM observation or minimal fixture when useful. A proposed code fix is optional.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criterion and limits
+      description: Describe one observable improvement and state what your evidence does not establish.
+    validations:
+      required: true
+  - type: checkboxes
+    id: integrity
+    attributes:
+      label: Rights, privacy and evidence
+      options:
+        - label: I removed credentials, private conversations, client material and proprietary packs; any third-party material is identified and permitted for sharing.
+          required: true
+        - label: I distinguish automated conformance from human design judgement and limit claims to the supplied evidence.
+          required: true
+        - label: This report does not disclose a security vulnerability; I will use SECURITY.md for one.
+          required: true
