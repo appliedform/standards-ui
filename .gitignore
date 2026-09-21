@@ -4,3 +4,5 @@ dist/
 *.tsbuildinfo
 .DS_Store
 .workflow-output/
+.standards-build-*/
+.standards-build.lock/

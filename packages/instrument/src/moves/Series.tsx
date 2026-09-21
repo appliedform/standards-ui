@@ -20,7 +20,7 @@ export interface SeriesProps {
 export const Series = defineMove<SeriesProps>(
   ({ label, periods, emphasiseLast = true, summary = [], height = 200, note, factPrefix }) => {
     const fact = (suffix: string) => factPrefix ? `${factPrefix}.${suffix}` : undefined;
-    const labelId = factPrefix ? `${factPrefix}-label` : undefined;
+    const labelId = React.useId();
     const chartHeight = Number.isFinite(height) && height > 0
       ? Math.min(4096, Math.max(96, height))
       : 200;
@@ -71,7 +71,7 @@ export const Series = defineMove<SeriesProps>(
                              left: 0, width: 24, lineHeight: "16px", textAlign: "right",
                              fontFamily: "var(--font-data)", fontSize: 11, color: "var(--muted)" }}>0</span>
             </div>
-            <ol className="instrument-series-values" aria-labelledby={labelId} aria-label={labelId ? undefined : `${label}: values by period`}
+            <ol className="instrument-series-values" aria-labelledby={labelId}
                 style={{ display: "flex", gap: 16, listStyle: "none", margin: 0, padding: "0 0 0 32px" }}>
               {periods.map((p, i) => {
                 const hot = emphasiseLast && i === periods.length - 1;

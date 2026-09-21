@@ -14,20 +14,33 @@ export interface MatrixProps {
   factPrefix?: string;
 }
 
+/** A slash is a safe wrapping boundary, not permission to split ordinary words.
+ * wbr adds no characters, so fact text and copy/paste remain exact. */
+function slashBreaks(value: string): React.ReactNode {
+  if (!value.includes("/")) return value;
+  const parts = value.split("/");
+  return parts.map((part, index) => (
+    <React.Fragment key={index}>
+      {part}{index < parts.length - 1 && <>/<wbr /></>}
+    </React.Fragment>
+  ));
+}
+
 /** Two variables crossed. The grid is the argument. */
 export const Matrix = defineMove<MatrixProps>(({ label, columns, rows, emphasis, note, factPrefix }) => {
   const fact = (suffix: string) => factPrefix ? `${factPrefix}.${suffix}` : undefined;
+  const labelId = React.useId();
   return (
   <section style={{ display: "flex", flexDirection: "column", gap: 32 }}>
-    <Label factId={fact("label")}>{label}</Label>
-    <table className="instrument-matrix" style={{ width: "100%", borderCollapse: "collapse", borderTop: "1px solid var(--ink)" }}>
+    <Label id={labelId} factId={fact("label")}>{label}</Label>
+    <table aria-labelledby={labelId} className="instrument-matrix" style={{ width: "100%", borderCollapse: "collapse", borderTop: "1px solid var(--ink)" }}>
       <thead>
         <tr>
           <th style={{ width: 96 }} />
           {columns.map((c, index) => (
             <th key={`${c}-${index}`} scope="col" data-std-fact={fact(`columns.${index}`)} style={{ fontFamily: "var(--font-data)", fontSize: 11, color: "var(--muted)",
                                              fontWeight: 400, textAlign: "right", padding: "8px 16px",
-                                             letterSpacing: "0.04em" }}>{c}</th>
+                                             letterSpacing: "0.04em" }}>{slashBreaks(c)}</th>
           ))}
         </tr>
       </thead>
@@ -36,7 +49,7 @@ export const Matrix = defineMove<MatrixProps>(({ label, columns, rows, emphasis,
           <tr key={r.label}>
             <th scope="row" data-std-fact={fact(`rows.${ri}.label`)} style={{ fontFamily: "var(--font-data)", fontSize: 13, fontWeight: 400,
                                      textAlign: "left", padding: "8px 16px 8px 0",
-                                     borderTop: "1px solid var(--rule)" }}>{r.label}</th>
+                                     borderTop: "1px solid var(--rule)" }}>{slashBreaks(r.label)}</th>
             {r.values.map((v, ci) => {
               const hot = emphasis && emphasis[0] === ri && emphasis[1] === ci;
               return (
@@ -45,7 +58,7 @@ export const Matrix = defineMove<MatrixProps>(({ label, columns, rows, emphasis,
                                       padding: "8px 16px", borderTop: "1px solid var(--rule)",
                                       borderLeft: hot ? "4px solid var(--signal)" : undefined,
                                       color: hot ? "var(--signal)" : "var(--ink)",
-                                      fontWeight: hot ? 500 : 400 }}>{v}</td>
+                                      fontWeight: hot ? 500 : 400 }}>{slashBreaks(v)}</td>
               );
             })}
           </tr>

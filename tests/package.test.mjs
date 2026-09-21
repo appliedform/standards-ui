@@ -1,11 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync } from "node:fs";
+import { copyFileSync, mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
+import { checkPackedBrowser } from "./helpers/packed-browser.mjs";
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const require = createRequire(import.meta.url);
@@ -27,7 +28,7 @@ function pack(directory, destination, cwd) {
   return { ...result[0], tarball: join(destination, result[0].filename) };
 }
 
-test("public tarballs contain documentation, licences and contracts, and work in an offline consumer", { timeout: 120_000 }, () => {
+test("public tarballs contain documentation, licences and contracts, and work in offline consumers", { timeout: 120_000 }, async (t) => {
   const temporary = mkdtempSync(join(tmpdir(), "standards-package-check-"));
   try {
     const archives = join(temporary, "archives");
@@ -148,17 +149,27 @@ test("public tarballs contain documentation, licences and contracts, and work in
 
     writeFileSync(join(consumer, "check.tsx"), `
       import { JOBS, defineMove, type JobKey, type TokenContract } from '@standards/core';
-      import { InstrumentRoot, Series, type SeriesProps } from '@standards/instrument';
+      import { InstrumentRoot, Datum, Matrix, BandStatement, Series, Schedule, RunningIndex,
+        type SeriesProps, type MatrixProps } from '@standards/instrument';
       const periods: SeriesProps['periods'] = [{ period: 'January', value: -24, display: '−24' }];
       const job: JobKey = Series.meta.job;
       const title: string = JOBS[job];
       const Custom = defineMove<{ title: string }>((props) => <div>{props.title}</div>,
         { job: 'C', move: 'Fixture', when: 'Checking types', why: 'Checks the packed declaration surface' });
-      const Example = () => <InstrumentRoot><Series label={title} periods={periods} /><Custom title={title} /></InstrumentRoot>;
+      const Example = () => <InstrumentRoot>
+        <Datum label="Yield" value="24" />
+        <Matrix label="Comparison" columns={['A']} rows={[{label:'One',values:['24']}]} />
+        <BandStatement statement="Test statement" />
+        <Series label={title} periods={periods} /><Custom title={title} />
+        <Schedule label="Scope" lines={[{ref:'A',description:'Work',duration:'1 day',amount:'£0'}]} />
+        <RunningIndex document="Report" folio="1" sections={['Evidence']} current={1} />
+      </InstrumentRoot>;
       declare const tokens: TokenContract;
       const system: string = tokens.system;
       // @ts-expect-error Packed declarations must reject text as a numeric observation.
       const invalid: SeriesProps = { label: 'Invalid', periods: [{ period: 'P1', value: 'text' }] };
+      // @ts-expect-error Facts in a Matrix are text, not executable elements.
+      const invalidMatrix: MatrixProps = { label: 'Invalid', columns: ['A'], rows: [{label: 'Row', values: [<div />]}] };
     `);
     writeFileSync(join(consumer, "tsconfig.json"), JSON.stringify({
       compilerOptions: {
@@ -174,9 +185,10 @@ test("public tarballs contain documentation, licences and contracts, and work in
       "@standards/core": `file:${core.tarball}`,
       "@standards/instrument": `file:${instrument.tarball}`,
     };
-    for (const [name, fixtureName] of [["react", "react18"],
-      ["loose-envify", "loose-envify"], ["js-tokens", "js-tokens"]]) {
-      const directory = dirname(require.resolve(`${fixtureName}/package.json`));
+    const require18 = createRequire(join(root, "tests/fixtures/react18/package.json"));
+    for (const name of ["react", "react-dom", "scheduler", "@types/react", "@types/prop-types",
+      "csstype", "loose-envify", "js-tokens"]) {
+      const directory = dirname(require18.resolve(`${name}/package.json`));
       const fixture = pack(directory, archives, temporary);
       react18Dependencies[name] = `file:${fixture.tarball}`;
     }
@@ -188,6 +200,7 @@ test("public tarballs contain documentation, licences and contracts, and work in
     writeFileSync(join(consumer18, "check.mjs"), `
       import assert from 'node:assert/strict';
       import * as React from 'react';
+      import { renderToString } from 'react-dom/server';
       import { Datum, InstrumentRoot } from '@standards/instrument';
       assert.match(React.version, /^18\\./);
       const datum = Datum({ label: 'React major', value: React.version });
@@ -195,8 +208,17 @@ test("public tarballs contain documentation, licences and contracts, and work in
       assert.equal(React.isValidElement(datum), true);
       assert.equal(React.isValidElement(root), true);
       assert.equal(root.props['data-standards-pack'], 'instrument');
+      assert.match(renderToString(root), /React major/);
     `);
     command(process.execPath, ["check.mjs"], consumer18);
+    for (const file of ["check.tsx", "tsconfig.json"]) copyFileSync(join(consumer, file), join(consumer18, file));
+    command(process.execPath, [tsc, "--project", "tsconfig.json"], consumer18);
+
+    for (const [directory, major] of [[consumer18, 18], [consumer, 19]]) {
+      await t.test(`React ${major}: packed SSR, hydration, local fonts and responsive consumer`, async () => {
+        await checkPackedBrowser(directory, major, command);
+      });
+    }
   } finally {
     rmSync(temporary, { recursive: true, force: true });
   }

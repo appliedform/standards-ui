@@ -18,9 +18,10 @@ export interface RunningIndexProps {
 export const RunningIndex = defineMove<RunningIndexProps>(
   ({ document, folio, sections, current, note, factPrefix }) => {
     const fact = (suffix: string) => factPrefix ? `${factPrefix}.${suffix}` : undefined;
-    const documentId = factPrefix ? `${factPrefix}-document` : undefined;
+    const documentId = React.useId();
     return (
-    <nav aria-labelledby={documentId} aria-label={documentId ? undefined : "Document position"}
+    <nav aria-labelledby={document.trim() ? documentId : undefined}
+         aria-label={document.trim() ? undefined : "Document position"}
          style={{ display: "flex", flexDirection: "column", gap: 32 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline",
                     borderBottom: "1px solid var(--ink)", paddingBottom: 8 }}>

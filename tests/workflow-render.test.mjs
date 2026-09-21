@@ -112,6 +112,39 @@ function movePlan(kind, data, title = `${kind} workflow fixture`) {
   };
 }
 
+test("Matrix slash-separated source phrases wrap without losing facts or splitting words", async () => {
+  const fixture = movePlan("matrix", {
+    label: "Synthetic routing assessment",
+    columns: ["Stage/route", "Review/evidence"],
+    rows: [
+      { label: "01/02", values: ["Source inspection", "collect/prepare/inspect/compare/retain/report/archive"] },
+      { label: "03/04", values: ["Routing review", "reviewer/accessibility and owner/support/maintainer checks"] },
+      { label: "05/06", values: ["Literal safety", "<script>/safe & literal/plain-text/only"] },
+      { label: "/07//", values: ["Leading and repeated separators", "/read//check/write/"] },
+    ],
+    note: "Synthetic strings; no customer or internal project material.",
+  }, "Routing assessment");
+  const directory = await mkdtemp(path.join(os.tmpdir(), "standards-matrix-slash-"));
+  const widths = [320, 390, 638, 639, 640, 768, 1024, 1440];
+  for (let start = 0; start < widths.length; start += 3) {
+    fixture.artifact.viewports = widths.slice(start, start + 3).map(width => ({width, height: 900}));
+    const html = await renderPlan(fixture);
+    assert.doesNotMatch(html, /<script>/);
+    const evidence = await inspectArtifact(fixture, html, directory);
+    for (const viewport of evidence.viewports) {
+      assert.equal(viewport.document.scrollWidth, viewport.width, `Matrix overflow at ${viewport.width}`);
+      assert.deepEqual(viewport.overflowingElements, []);
+      assert.deepEqual(viewport.pageErrors, []);
+      assert.deepEqual(viewport.blockedRequests, []);
+      assert.deepEqual(viewport.unmarkedText, []);
+      assert.deepEqual(viewport.facts.map(({id,text}) => ({id,text})), fixture.facts);
+      assert.ok(viewport.facts.every(f => f.visible && !f.clipped && !f.occluded));
+      assert.ok(viewport.semanticChecks.relationships.every(r => r.passed));
+    }
+    assert.deepEqual((await inspectWordWrapping(html)).midWordBreaks, []);
+  }
+});
+
 test("renders all six manifest surfaces with exact fact and relationship evidence", async () => {
   const fixtures = {
     datum: { label: "Mean tensile strength", value: "1,240", unit: "MPa",
@@ -136,27 +169,32 @@ test("renders all six manifest surfaces with exact fact and relationship evidenc
   assert.deepEqual(Object.keys(fixtures), SUPPORT.supported.map((entry) => entry.contentKind));
   for (const [kind, data] of Object.entries(fixtures)) {
     const fixture = movePlan(kind, data);
-    fixture.artifact.viewports = [{ width: 1280, height: 960 }, { width: 390, height: 844 }];
-    assert.doesNotThrow(() => expectedFacts(fixture));
-    const html = await renderPlan(fixture);
-    assert.match(html, new RegExp(`data-std-fact="${kind.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\.`));
-    assert.doesNotMatch(html, /<link\b|url\(\s*https?:/i);
-    const directory = await mkdtemp(path.join(os.tmpdir(), `standards-${kind}-`));
-    const evidence = await inspectArtifact(fixture, html, directory);
-    assert.equal(evidence.schemaVersion, SUPPORT.renderer.evidenceVersion);
-    assert.equal(evidence.renderer.supportManifestSha256, RENDERER_IDENTITY.supportManifestSha256);
-    for (const viewport of evidence.viewports) {
-      assert.deepEqual(viewport.pageErrors, []);
-      assert.deepEqual(viewport.blockedRequests, []);
-      assert.deepEqual(viewport.overflowingElements, [], `${kind} overflows at ${viewport.width}px`);
-      assert.deepEqual(viewport.unmarkedText, [], `${kind} has unmarked visible text at ${viewport.width}px`);
-      assert.equal(viewport.semanticChecks.move, fixture.move);
-      assert.equal(viewport.semanticChecks.oneVisibleH1, true);
-      assert.deepEqual(viewport.semanticChecks.relationships,
-        fixture.requiredRelationships.map((id) => ({ id, passed: true })));
-      assert.deepEqual(viewport.facts.map(({ id, text }) => ({ id, text })), fixture.facts);
-      assert.ok(viewport.facts.every((fact) => fact.visible && !fact.clipped && !fact.occluded),
-        `${kind}/${viewport.width}: ${JSON.stringify(viewport.facts.filter((fact) => !fact.visible || fact.clipped || fact.occluded))}`);
+    for (const widths of [[320, 390, 638], [639, 640, 768], [1024, 1280, 1440]]) {
+      fixture.artifact.viewports = widths.map(width => ({ width, height: 960 }));
+      assert.doesNotThrow(() => expectedFacts(fixture));
+      const html = await renderPlan(fixture);
+      assert.match(html, new RegExp(`data-std-fact="${kind.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\.`));
+      assert.doesNotMatch(html, /<link\b|url\(\s*https?:/i);
+      // The public static-artifact contract binds accessible names to visible
+      // approved facts; attribute-only labels are deliberately not admitted.
+      assert.doesNotMatch(html, /\saria-(?:label|description)=/i);
+      const directory = await mkdtemp(path.join(os.tmpdir(), `standards-${kind}-`));
+      const evidence = await inspectArtifact(fixture, html, directory);
+      assert.equal(evidence.schemaVersion, SUPPORT.renderer.evidenceVersion);
+      assert.equal(evidence.renderer.supportManifestSha256, RENDERER_IDENTITY.supportManifestSha256);
+      for (const viewport of evidence.viewports) {
+        assert.deepEqual(viewport.pageErrors, []);
+        assert.deepEqual(viewport.blockedRequests, []);
+        assert.deepEqual(viewport.overflowingElements, [], `${kind} overflows at ${viewport.width}px`);
+        assert.deepEqual(viewport.unmarkedText, [], `${kind} has unmarked visible text at ${viewport.width}px`);
+        assert.equal(viewport.semanticChecks.move, fixture.move);
+        assert.equal(viewport.semanticChecks.oneVisibleH1, true);
+        assert.deepEqual(viewport.semanticChecks.relationships,
+          fixture.requiredRelationships.map((id) => ({ id, passed: true })));
+        assert.deepEqual(viewport.facts.map(({ id, text }) => ({ id, text })), fixture.facts);
+        assert.ok(viewport.facts.every((fact) => fact.visible && !fact.clipped && !fact.occluded),
+          `${kind}/${viewport.width}: ${JSON.stringify(viewport.facts.filter((fact) => !fact.visible || fact.clipped || fact.occluded))}`);
+      }
     }
   }
 });

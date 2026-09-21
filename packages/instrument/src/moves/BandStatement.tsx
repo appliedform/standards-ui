@@ -24,7 +24,7 @@ export const BandStatement = defineMove<BandStatementProps>(
       <div style={{ background: "var(--ink)", padding: 32,
                     margin: `0 max(-${bleed}px, calc((100% - 100vw) / 2))` }}>
         <p data-std-fact={fact("statement")} style={{ margin: 0, color: "#FFFFFF", fontSize: 34, fontWeight: 800,
-                    lineHeight: 1.15, maxWidth: "24ch" }}>{statement}</p>
+                    lineHeight: 1.15, maxWidth: "24ch", overflowWrap: "anywhere" }}>{statement}</p>
       </div>
       {figures.length > 0 && (
         <div style={{ display: "flex", flexWrap: "wrap", gap: 48,

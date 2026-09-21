@@ -104,6 +104,29 @@ Use Node 22 or 24 LTS for the agent workflow renderer. Its identity includes the
 exact support-manifest, package, font, runtime, Node executable and installed
 Chromium payload hashes. Plans outside the six declared job/move pairs fail closed.
 
+The package consumer tests install tarballs into isolated directories with matching
+React/React DOM 18.3.1 and 19.2.8, compile against each major's React declarations,
+and check server rendering plus browser hydration. They bundle the public CSS
+imports and all five WOFF2 faces, preserve 36 declared fixture facts, verify table,
+list and navigation names, and exercise 320/390/640/1280px widths without external asset
+requests. These are bounded synthetic consumer checks, not all React versions,
+host frameworks, browsers or assistive technologies. The private test fixture is
+installed by `npm ci` but is not part of either public tarball.
+
+Builds use locally installed tools without shell interpolation or `npx` fallback.
+All packages compile into a temporary stage before their `dist` directories are
+replaced. Compiler failures preserve the last successful outputs; a caught
+replacement failure attempts to restore them. This is process-level rollback,
+not a crash-safe transaction or a guarantee for readers during replacement.
+Do not package or consume build outputs concurrently with a build.
+
+An existing `.standards-build.lock` stops competing builds. If a process is killed
+or rollback fails, inspect the lock's `owner.json` and retained
+`.standards-build-*` directories before retrying. Confirm the recorded process is
+no longer running; preserve `previous/` backups and restore any missing package
+outputs before removing only that stale lock. Do not delete recovery directories
+blindly. A successful retry replaces stale generated files.
+
 The audit is the interesting part. For each pack it checks that every declared
 move is exported with metadata matching `archetypes.json` exactly, that nothing
 undeclared is exported, that every colour appears in that pack's `tokens.json`,
